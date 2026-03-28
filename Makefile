@@ -15,6 +15,7 @@ ifneq (,$(wildcard .env))
 endif
 
 .PHONY: help build build-test test package run debug debug-test \
+        install-hooks gitleaks-scan \
         sonar-start sonar-scan trivy-scan
 
 # Default target
@@ -54,6 +55,20 @@ debug: build ## Open a shell in the artifact container
 
 debug-test: build-test ## Open a shell in the test container
 	docker run -it --rm --entrypoint /bin/sh $(APP_NAME)-test:$(IMAGE_TAG)
+
+# — Git Hooks —————————————————————————————————————————————————————————————————
+
+install-hooks: ## Install git hooks from .githooks/ (run once after cloning)
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-commit
+	@echo "  Git hooks installed. pre-commit will scan for secrets via gitleaks."
+
+gitleaks-scan: ## Scan entire repo history for secrets with gitleaks (Docker)
+	docker run --rm \
+	  -v "$(PWD):/repo" \
+	  -w /repo \
+	  ghcr.io/gitleaks/gitleaks:v8.21.2 \
+	  detect --no-banner -v
 
 # — Static Analysis & CVE Scanning —————————————————————————————————————————————
 

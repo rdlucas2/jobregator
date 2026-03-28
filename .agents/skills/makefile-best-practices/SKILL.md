@@ -1,6 +1,6 @@
 ---
 name: makefile-best-practices
-description: Write Makefiles following best practices: phony targets, .env file loading, self-documenting help, and Docker workflow targets (build, test, scan, run, debug). Use when creating or editing a Makefile, or when the user asks about project automation, make targets, or build scripts.
+description: Write Makefiles following best practices: phony targets, .env file loading, self-documenting help, Docker workflow targets (build, test, scan, run, debug), and git hooks (gitleaks secret scanning). Use when creating or editing a Makefile, or when the user asks about project automation, make targets, build scripts, or secret scanning.
 ---
 
 # Makefile Best Practices
@@ -132,6 +132,45 @@ test:
 ```
 Add `coverage/`, `trivy-report.*` to `.gitignore`.
 
+## Git Hooks — Gitleaks Secret Scanning
+
+Store hooks in `.githooks/` (committed to the repo) and configure git to use them:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Provide an `install-hooks` Makefile target so all contributors run it once after cloning:
+
+```makefile
+install-hooks: ## Install git hooks from .githooks/ (run once after cloning)
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-commit
+```
+
+### `.githooks/pre-commit` pattern
+
+```bash
+#!/bin/bash
+set -euo pipefail
+GITLEAKS_VERSION="v8.21.2"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if command -v gitleaks &>/dev/null; then
+  gitleaks protect --staged --no-banner -v
+elif command -v docker &>/dev/null; then
+  docker run --rm -v "${REPO_ROOT}:/repo" -w /repo \
+    "ghcr.io/gitleaks/gitleaks:${GITLEAKS_VERSION}" protect --staged --no-banner -v
+else
+  echo "ERROR: gitleaks or docker required"; exit 1
+fi
+```
+
+- Local binary is used when available (faster); Docker is the fallback
+- A `.gitleaks.toml` in the repo root configures allowlists for false positives
+- Add `# gitleaks:allow` inline for single-line exceptions
+- Add a `gitleaks-scan` target to scan full repo history on demand
+
 ## Checklist
 
 - [ ] `.PHONY` declared for all non-file targets
@@ -143,3 +182,7 @@ Add `coverage/`, `trivy-report.*` to `.gitignore`.
 - [ ] `coverage/` and scan output files in `.gitignore`
 - [ ] `trivy-scan` and `sonar-scan` targets present
 - [ ] `debug` target available for local troubleshooting
+- [ ] `.githooks/pre-commit` committed with gitleaks scan
+- [ ] `install-hooks` target present; hooks directory executable
+- [ ] `.gitleaks.toml` present with allowlist for `.env.example` and vendor paths
+- [ ] `gitleaks-scan` target for full history scan on demand
