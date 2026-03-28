@@ -1,0 +1,18 @@
+# Environment — never commit secrets
+.env
+
+# Test & coverage output
+coverage/
+*.out
+*.xml
+
+# Trivy scan reports
+trivy-report.txt
+trivy-report.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
