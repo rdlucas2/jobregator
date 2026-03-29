@@ -1,0 +1,51 @@
+services:
+  nats:
+    image: nats:2.11-alpine
+    command: ["--jetstream", "--store_dir", "/data"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - nats-data:/data
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: jobregator
+      POSTGRES_PASSWORD: jobregator
+      POSTGRES_DB: jobregator
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+
+  scraper:
+    build:
+      context: ./services/scraper
+      target: artifact
+    environment:
+      NATS_URL: nats://nats:4222
+      ADZUNA_APP_ID: ${ADZUNA_APP_ID}
+      ADZUNA_APP_KEY: ${ADZUNA_APP_KEY}
+      ADZUNA_COUNTRY: ${ADZUNA_COUNTRY:-us}
+      LOOKBACK_HOURS: ${LOOKBACK_HOURS:-14}
+      PROFILE_PATH: /config/profile.yaml
+    volumes:
+      - ./config:/config:ro
+    depends_on:
+      - nats
+
+  worker:
+    build:
+      context: ./services/worker
+      target: artifact
+    environment:
+      NATS_URL: nats://nats:4222
+      POSTGRES_DSN: postgresql://jobregator:jobregator@postgres:5432/jobregator
+    depends_on:
+      - nats
+      - postgres
+
+volumes:
+  nats-data:
+  pg-data:
