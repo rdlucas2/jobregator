@@ -1,0 +1,26 @@
+# Never bake secrets into the image
+.env
+
+# Git metadata (not needed in image)
+.git
+.gitignore
+
+# Test & scan output
+coverage/
+trivy-report.txt
+trivy-report.json
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# CI
+.github/
+
+# Skills / Claude config (not needed in image)
+.claude/
+.agents/
+CLAUDE.md
+skills-lock.json

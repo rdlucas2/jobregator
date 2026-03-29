@@ -1,0 +1,57 @@
+#!/bin/bash
+# =============================================================================
+# pre-commit: gitleaks secret scan
+# Blocks commits that contain credentials, API keys, or other secrets.
+#
+# Install this hook: make install-hooks
+#
+# Requires gitleaks (local binary preferred) or Docker as fallback.
+#   Local:  https://github.com/gitleaks/gitleaks#installing
+#   Docker: https://www.docker.com/
+# =============================================================================
+
+set -euo pipefail
+
+GITLEAKS_VERSION="v8.21.2"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+echo "[gitleaks] Scanning staged files for secrets..."
+
+DOCKER_AVAILABLE=false
+if command -v docker &>/dev/null && docker info &>/dev/null 2>&1; then
+  DOCKER_AVAILABLE=true
+fi
+
+if command -v gitleaks &>/dev/null; then
+  # Use locally installed binary (faster)
+  gitleaks protect --staged --no-banner -v
+elif [ "$DOCKER_AVAILABLE" = "true" ]; then
+  # Fall back to Docker image (no local install required)
+  docker run --rm \
+    -v "${REPO_ROOT}:/repo" \
+    -w /repo \
+    "ghcr.io/gitleaks/gitleaks:${GITLEAKS_VERSION}" \
+    protect --staged --no-banner -v
+else
+  echo ""
+  echo "[gitleaks] WARNING: gitleaks not found and Docker is not available."
+  echo "           Secret scanning was skipped for this commit."
+  echo "           Install gitleaks to enforce scanning:"
+  echo "           https://github.com/gitleaks/gitleaks#installing"
+  echo ""
+  exit 0
+fi
+
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+  echo ""
+  echo "[gitleaks] COMMIT BLOCKED: secrets detected in staged files."
+  echo "           Remove or rotate the secrets before committing."
+  echo "           To allow a false positive, add a '# gitleaks:allow' comment"
+  echo "           or update .gitleaks.toml with an allowlist rule."
+  echo ""
+  exit 1
+fi
+
+echo "[gitleaks] No secrets detected. Proceeding with commit."

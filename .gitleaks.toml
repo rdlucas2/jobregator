@@ -1,0 +1,31 @@
+# gitleaks configuration
+# Docs: https://github.com/gitleaks/gitleaks#configuration
+
+title = "jobregator gitleaks config"
+
+[extend]
+# Extend the default ruleset
+useDefault = true
+
+# =============================================================================
+# Allowlist — add false-positive patterns here rather than disabling the hook.
+# Prefer inline comments (# gitleaks:allow) for single-line exceptions.
+# =============================================================================
+
+[allowlist]
+description = "Global allowlist"
+
+# Paths to exclude from scanning
+paths = [
+  # Example/template files intentionally contain placeholder values
+  '''.env\.example''',
+  # Third-party vendored code
+  '''vendor/''',
+  # Generated lock files
+  '''skills-lock\.json''',
+]
+
+# Regex patterns to exclude (matched against the secret value)
+# regexes = [
+#   '''PLACEHOLDER_VALUE''',
+# ]
