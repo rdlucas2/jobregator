@@ -107,7 +107,7 @@ export function listingTable(listings: Listing[], page: number, totalPages: numb
 
   const pagination = totalPages > 1
     ? html`<div class="pagination">
-        ${Array.from({ length: totalPages }, (_, i) => i + 1)
+        ${raw(Array.from({ length: totalPages }, (_, i) => i + 1)
           .map(
             (p) => html`<button
               hx-get="/listings?page=${p}"
@@ -116,7 +116,7 @@ export function listingTable(listings: Listing[], page: number, totalPages: numb
               class="${p === page ? "active" : ""}"
             >${p}</button>`,
           )
-          .join("")}
+          .join(""))}
       </div>`
     : "";
 
@@ -133,7 +133,7 @@ export function listingTable(listings: Listing[], page: number, totalPages: numb
         </tr>
       </thead>
       <tbody>
-        ${rows}
+        ${raw(rows)}
       </tbody>
     </table>
     ${pagination}`.toString();
@@ -191,7 +191,7 @@ export function listingDetail(listing: Listing): string {
         skills.length > 0
           ? html`<div style="margin-top: 1rem;">
               <dt style="font-size: 0.8rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em;">Skills</dt>
-              <div class="skills">${skills.map((s) => html`<span class="skill-tag">${s}</span>`).join("")}</div>
+              <div class="skills">${raw(skills.map((s) => html`<span class="skill-tag">${s}</span>`).join(""))}</div>
             </div>`
           : ""
       }
@@ -200,7 +200,7 @@ export function listingDetail(listing: Listing): string {
         techStack.length > 0
           ? html`<div style="margin-top: 1rem;">
               <dt style="font-size: 0.8rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em;">Tech Stack</dt>
-              <div class="skills">${techStack.map((t) => html`<span class="skill-tag">${t}</span>`).join("")}</div>
+              <div class="skills">${raw(techStack.map((t) => html`<span class="skill-tag">${t}</span>`).join(""))}</div>
             </div>`
           : ""
       }
