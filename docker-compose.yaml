@@ -37,11 +37,21 @@ services:
 
   worker:
     build:
-      context: ./services/worker
+      context: .
+      dockerfile: services/worker/Dockerfile
       target: artifact
     environment:
       NATS_URL: nats://nats:4222
       POSTGRES_DSN: postgresql://jobregator:jobregator@postgres:5432/jobregator
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-20250514}
+      ENABLE_ENRICHMENT: ${ENABLE_ENRICHMENT:-true}
+      MCP_SERVER_CMD: python
+      MCP_SERVER_ARGS: "-m src.server"
+      MCP_SERVER_WORKDIR: /mcp-server
+      PROFILE_PATH: /config/profile.yaml
+    volumes:
+      - ./config:/config:ro
     depends_on:
       - nats
       - postgres

@@ -4,7 +4,7 @@ import os
 import psycopg2
 import pytest
 
-from src.db import ensure_schema, insert_listing, listing_exists
+from src.db import ensure_schema, insert_listing, listing_exists, update_enrichment
 
 
 @pytest.fixture(scope="module")
@@ -72,3 +72,27 @@ def test_different_sources_same_external_id_both_inserted(db_conn):
     listing_b = _make_listing(external_id="123", source="indeed")
     assert insert_listing(db_conn, listing_a) is True
     assert insert_listing(db_conn, listing_b) is True
+
+
+def test_update_enrichment_sets_enriched_json_and_score(db_conn):
+    listing = _make_listing()
+    insert_listing(db_conn, listing)
+
+    enriched = {"skills": ["K8s", "Terraform"], "experience_level": "senior"}
+    update_enrichment(db_conn, "adzuna", "123", enriched_json=enriched, fit_score=0.85)
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT enriched_json, fit_score FROM job_listings WHERE source=%s AND external_id=%s",
+            ("adzuna", "123"),
+        )
+        row = cur.fetchone()
+
+    assert row is not None
+    assert row[0] == enriched
+    assert row[1] == pytest.approx(0.85)
+
+
+def test_update_enrichment_on_nonexistent_listing_is_noop(db_conn):
+    # Should not raise, just update 0 rows
+    update_enrichment(db_conn, "adzuna", "nonexistent", enriched_json={}, fit_score=0.0)

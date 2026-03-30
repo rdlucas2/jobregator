@@ -1,4 +1,5 @@
 import psycopg2
+import psycopg2.extras
 
 
 SCHEMA_SQL = """
@@ -56,3 +57,22 @@ def listing_exists(conn, source: str, external_id: str) -> bool:
     with conn.cursor() as cur:
         cur.execute(sql, (source, external_id))
         return cur.fetchone() is not None
+
+
+def update_enrichment(conn, source: str, external_id: str, enriched_json: dict, fit_score: float):
+    """Update a listing with enrichment data from the MCP server."""
+    sql = """
+        UPDATE job_listings
+        SET enriched_json = %(enriched_json)s,
+            fit_score = %(fit_score)s,
+            updated_at = NOW()
+        WHERE source = %(source)s AND external_id = %(external_id)s
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, {
+            "enriched_json": psycopg2.extras.Json(enriched_json),
+            "fit_score": fit_score,
+            "source": source,
+            "external_id": external_id,
+        })
+    conn.commit()
