@@ -56,6 +56,17 @@ services:
       - nats
       - postgres
 
+  notifier:
+    build:
+      context: ./services/notifier
+      target: artifact
+    environment:
+      NATS_URL: nats://nats:4222
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      FIT_SCORE_THRESHOLD: ${FIT_SCORE_THRESHOLD:-0.7}
+    depends_on:
+      - nats
+
 volumes:
   nats-data:
   pg-data:
