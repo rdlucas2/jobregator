@@ -40,11 +40,62 @@ async def test_analyze_job_listing_returns_structured_data():
     assert result["skills"] == ["Kubernetes", "Terraform", "CI/CD", "Python"]
     assert result["experience_level"] == "senior"
     assert result["remote_policy"] == "remote"
+    assert "remote_policy" in llm.last_prompt.lower() or "remote" in llm.last_prompt.lower()
     assert result["tech_stack"] == ["AWS", "Docker", "GitHub Actions"]
     assert "DevOps" in result["summary"]
     # Verify the LLM was called with listing context
     assert "Senior DevOps Engineer" in llm.last_prompt
     assert "Acme Corp" in llm.last_prompt
+
+
+@pytest.mark.asyncio
+async def test_analyze_prompt_includes_remote_detection_instructions():
+    fake_response = json.dumps({
+        "skills": [],
+        "experience_level": "senior",
+        "remote_policy": "hybrid",
+        "remote_flags": ["3 days in office required"],
+        "tech_stack": [],
+        "job_type": "full_time",
+        "summary": "A hybrid role.",
+    })
+    llm = FakeLLM(fake_response)
+
+    listing = {
+        "title": "DevOps Engineer",
+        "company": "Corp",
+        "description": "Remote-friendly but 3 days in office required.",
+        "location": "Remote",
+    }
+
+    result = await analyze_job_listing(listing, llm=llm)
+
+    assert result["remote_policy"] == "hybrid"
+    assert result["remote_flags"] == ["3 days in office required"]
+    # Verify the prompt instructs careful remote analysis
+    assert "hybrid" in llm.last_prompt.lower()
+
+
+@pytest.mark.asyncio
+async def test_score_fit_prompt_penalizes_non_remote():
+    fake_response = json.dumps({
+        "score": 0.25,
+        "reasoning": "Role requires 3 days in office, not truly remote.",
+    })
+    llm = FakeLLM(fake_response)
+
+    listing = {
+        "title": "DevOps Engineer",
+        "company": "Corp",
+        "description": "Must be in NYC office 3 days per week.",
+    }
+
+    result = await score_fit(listing, "Remote-only senior engineer.", llm=llm)
+
+    assert result["score"] == 0.25
+    # Verify the prompt mentions remote penalty
+    assert "remote" in llm.last_prompt.lower()
+    assert "penalize" in llm.last_prompt.lower()
 
 
 @pytest.mark.asyncio

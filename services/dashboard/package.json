@@ -12,6 +12,7 @@
   "dependencies": {
     "@hono/node-server": "^1.14.0",
     "hono": "^4.7.0",
+    "nats": "^2.29.3",
     "postgres": "^3.4.0"
   },
   "devDependencies": {

@@ -62,7 +62,8 @@ func main() {
 			}
 
 			filtered := source.FilterByLookback(listings, lookbackHours)
-			log.Printf("[%s] got %d listings for %q (%d after time filter)",
+			filtered = source.ApplyHardFilters(filtered, profile.HardFilters)
+			log.Printf("[%s] got %d listings for %q (%d after filters)",
 				src.Name(), len(listings), term, len(filtered))
 
 			for _, l := range filtered {
