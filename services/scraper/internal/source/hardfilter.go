@@ -8,18 +8,29 @@ import (
 	"github.com/rdlucas2/jobregator/services/scraper/internal/config"
 )
 
-// ApplyHardFilters removes listings that fail any configured hard filter.
-// Filters with zero values are treated as disabled.
+// ApplyHardFilters tags listings that fail any configured hard filter with a FilterReason.
+// Filters with zero values are treated as disabled. All listings are returned.
 func ApplyHardFilters(listings []RawListing, filters config.HardFilters) []RawListing {
-	var result []RawListing
+	result := make([]RawListing, 0, len(listings))
 	for _, l := range listings {
 		if reason := failsFilter(l, filters); reason != "" {
 			log.Printf("[filter] rejected %q (%s) from %s — %s", l.Title, l.ExternalID, l.Source, reason)
-			continue
+			l.FilterReason = reason
 		}
 		result = append(result, l)
 	}
 	return result
+}
+
+// CountPassed returns the number of listings without a filter reason.
+func CountPassed(listings []RawListing) int {
+	count := 0
+	for _, l := range listings {
+		if l.FilterReason == "" {
+			count++
+		}
+	}
+	return count
 }
 
 // failsFilter returns the name of the first filter the listing fails, or "" if it passes all.

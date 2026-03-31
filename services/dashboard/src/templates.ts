@@ -14,6 +14,7 @@ export interface Listing {
   fit_score: number | null;
   enriched_json: Record<string, unknown> | null;
   description?: string;
+  filter_reason?: string | null;
 }
 
 export function scoreColor(score: number | null): string {
@@ -35,8 +36,12 @@ export function formatDate(dateStr: string): string {
 }
 
 export function listingRow(l: Listing): string {
-  return html`<tr>
-    <td><a href="/listings/${l.id}">${l.title}</a></td>
+  const filtered = l.filter_reason ? ' class="filtered-row"' : "";
+  const filterBadge = l.filter_reason
+    ? `<span class="badge badge-filtered" title="${l.filter_reason}">filtered</span>`
+    : "";
+  return html`<tr${raw(filtered)}>
+    <td><a href="/listings/${l.id}">${l.title}</a> ${raw(filterBadge)}</td>
     <td>${l.company}</td>
     <td>${l.location}</td>
     <td><span class="score" style="color: ${scoreColor(l.fit_score)}">${scoreDisplay(l.fit_score)}</span></td>
@@ -77,6 +82,8 @@ export function layout(title: string, content: string): string {
 
           .score { font-weight: 600; font-size: 0.95rem; }
           .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; background: #1c1f26; }
+          .badge-filtered { background: #8b4513; color: #ffa500; margin-left: 0.5rem; cursor: help; }
+          .filtered-row { opacity: 0.6; }
 
           .detail { background: #161b22; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
           .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }

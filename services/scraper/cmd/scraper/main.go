@@ -78,12 +78,13 @@ func main() {
 				continue
 			}
 
-			filtered := source.FilterByLookback(listings, lookbackHours)
-			filtered = source.ApplyHardFilters(filtered, profile.HardFilters)
-			log.Printf("[%s] got %d listings for %q (%d after filters)",
-				src.Name(), len(listings), term, len(filtered))
+			tagged := source.FilterByLookback(listings, lookbackHours)
+			tagged = source.ApplyHardFilters(tagged, profile.HardFilters)
+			passed := source.CountPassed(tagged)
+			log.Printf("[%s] got %d listings for %q (%d passed filters, %d rejected)",
+				src.Name(), len(listings), term, passed, len(tagged)-passed)
 
-			for _, l := range filtered {
+			for _, l := range tagged {
 				if err := pub.Publish(ctx, l); err != nil {
 					log.Printf("[%s] error publishing %s: %v", src.Name(), l.ExternalID, err)
 					continue

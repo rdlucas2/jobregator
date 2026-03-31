@@ -22,6 +22,7 @@ export interface ListingsQuery {
   maxSalary?: number;
   search?: string;
   source?: string;
+  status?: "all" | "passed" | "filtered";
   sortBy?: SortColumn;
   sortOrder?: SortOrder;
 }
@@ -54,6 +55,11 @@ export async function getListings(
   if (query.source) {
     conditions.push(`source = $${paramIdx++}`);
     params.push(query.source);
+  }
+  if (query.status === "passed") {
+    conditions.push(`filter_reason IS NULL`);
+  } else if (query.status === "filtered") {
+    conditions.push(`filter_reason IS NOT NULL`);
   }
   if (query.minSalary !== undefined) {
     conditions.push(`CAST(NULLIF(REGEXP_REPLACE(SPLIT_PART(salary, '-', 1), '[^0-9]', '', 'g'), '') AS INTEGER) >= $${paramIdx++}`);
@@ -88,7 +94,7 @@ export async function getListings(
 
   const listings = await db.unsafe(
     `SELECT id, source, external_id, title, company, location, url, salary,
-            posted_at, fit_score, enriched_json
+            posted_at, fit_score, enriched_json, filter_reason
      FROM job_listings ${where}
      ${orderBy}
      LIMIT $${paramIdx++} OFFSET $${paramIdx}`,

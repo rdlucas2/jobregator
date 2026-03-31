@@ -88,11 +88,13 @@ function parseQuery(c: { req: { query: (key: string) => string | undefined } }):
   const maxSalary = c.req.query("max_salary") ? Number(c.req.query("max_salary")) : undefined;
   const search = c.req.query("search") || undefined;
   const source = c.req.query("source") || undefined;
+  const statusRaw = c.req.query("status") as "all" | "passed" | "filtered" | undefined;
+  const status = statusRaw && ["all", "passed", "filtered"].includes(statusRaw) ? statusRaw : "passed";
   const sortByRaw = c.req.query("sort_by") as SortColumn | undefined;
   const sortBy = sortByRaw && validSortColumns.has(sortByRaw) ? sortByRaw : undefined;
   const sortOrderRaw = c.req.query("sort_order") as SortOrder | undefined;
   const sortOrder = sortOrderRaw && validSortOrders.has(sortOrderRaw) ? sortOrderRaw : undefined;
-  return { page, minScore, maxScore, minSalary, maxSalary, search, source, sortBy, sortOrder };
+  return { page, minScore, maxScore, minSalary, maxSalary, search, source, status, sortBy, sortOrder };
 }
 
 function getSortState(query: ListingsQuery): SortState {
@@ -177,6 +179,15 @@ app.get("/", async (c) => {
                 hx-trigger="change" hx-include=".filters">
           <option value="">All</option>
           ${sourceOptions}
+        </select>
+      </label>
+      <label>Status
+        <select name="status"
+                hx-get="/listings" hx-target="#listing-results" hx-swap="innerHTML"
+                hx-trigger="change" hx-include=".filters">
+          <option value="passed"${query.status === "passed" || !query.status ? " selected" : ""}>Passed</option>
+          <option value="all"${query.status === "all" ? " selected" : ""}>All</option>
+          <option value="filtered"${query.status === "filtered" ? " selected" : ""}>Filtered</option>
         </select>
       </label>
       <input type="hidden" name="sort_by" value="${sort.sortBy}" />

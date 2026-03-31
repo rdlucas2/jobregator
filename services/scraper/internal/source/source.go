@@ -11,15 +11,16 @@ type SearchQuery struct {
 }
 
 type RawListing struct {
-	Source      string    `json:"source"`
-	ExternalID  string    `json:"external_id"`
-	Title       string    `json:"title"`
-	Company     string    `json:"company"`
-	Location    string    `json:"location"`
-	Description string    `json:"description"`
-	URL         string    `json:"url"`
-	Salary      string    `json:"salary"`
-	PostedAt    time.Time `json:"posted_at"`
+	Source       string    `json:"source"`
+	ExternalID   string    `json:"external_id"`
+	Title        string    `json:"title"`
+	Company      string    `json:"company"`
+	Location     string    `json:"location"`
+	Description  string    `json:"description"`
+	URL          string    `json:"url"`
+	Salary       string    `json:"salary"`
+	PostedAt     time.Time `json:"posted_at"`
+	FilterReason string    `json:"filter_reason,omitempty"`
 }
 
 type JobSource interface {

@@ -32,7 +32,7 @@ func newListingWithDesc(title, location, salary, description string) source.RawL
 	return l
 }
 
-func TestApplyHardFilters_RemoteOnly_KeepsRemoteListings(t *testing.T) {
+func TestApplyHardFilters_RemoteOnly_TagsNonRemote(t *testing.T) {
 	filters := config.HardFilters{Remote: true}
 	listings := []source.RawListing{
 		newListing("DevOps Engineer", "Remote", "$150000-$200000"),
@@ -41,8 +41,14 @@ func TestApplyHardFilters_RemoteOnly_KeepsRemoteListings(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 2 {
-		t.Fatalf("got %d listings, want 2 (only remote)", len(result))
+	if len(result) != 3 {
+		t.Fatalf("got %d listings, want 3 (all returned)", len(result))
+	}
+	if source.CountPassed(result) != 2 {
+		t.Fatalf("passed %d listings, want 2 (only remote)", source.CountPassed(result))
+	}
+	if result[2].FilterReason == "" {
+		t.Error("expected non-remote listing to have filter reason")
 	}
 }
 
@@ -54,12 +60,12 @@ func TestApplyHardFilters_RemoteFalse_KeepsAll(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 2 {
-		t.Fatalf("got %d listings, want 2 (remote filter disabled)", len(result))
+	if source.CountPassed(result) != 2 {
+		t.Fatalf("passed %d, want 2 (remote filter disabled)", source.CountPassed(result))
 	}
 }
 
-func TestApplyHardFilters_MinSalary_FiltersLowPay(t *testing.T) {
+func TestApplyHardFilters_MinSalary_TagsLowPay(t *testing.T) {
 	filters := config.HardFilters{MinSalary: 150000}
 	listings := []source.RawListing{
 		newListing("Senior DevOps", "Remote", "$160000-$200000"),
@@ -68,15 +74,17 @@ func TestApplyHardFilters_MinSalary_FiltersLowPay(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	// Keeps the $160k listing and the empty-salary listing (no data = don't filter)
-	if len(result) != 2 {
-		t.Fatalf("got %d listings, want 2 (filter low salary, keep unknown)", len(result))
+	if source.CountPassed(result) != 2 {
+		t.Fatalf("passed %d, want 2 (filter low salary, keep unknown)", source.CountPassed(result))
 	}
-	if result[0].Title != "Senior DevOps" {
-		t.Errorf("result[0].Title = %q, want %q", result[0].Title, "Senior DevOps")
+	if result[0].FilterReason != "" {
+		t.Errorf("$160k listing should pass, got reason: %q", result[0].FilterReason)
 	}
-	if result[1].Title != "DevOps Engineer" {
-		t.Errorf("result[1].Title = %q, want %q", result[1].Title, "DevOps Engineer")
+	if result[1].FilterReason == "" {
+		t.Error("$80k listing should be tagged")
+	}
+	if result[2].FilterReason != "" {
+		t.Errorf("empty salary listing should pass, got reason: %q", result[2].FilterReason)
 	}
 }
 
@@ -87,12 +95,12 @@ func TestApplyHardFilters_MinSalaryZero_KeepsAll(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 1 {
-		t.Fatalf("got %d listings, want 1 (no salary filter)", len(result))
+	if source.CountPassed(result) != 1 {
+		t.Fatalf("passed %d, want 1 (no salary filter)", source.CountPassed(result))
 	}
 }
 
-func TestApplyHardFilters_ExcludeTitles_FiltersMatches(t *testing.T) {
+func TestApplyHardFilters_ExcludeTitles_TagsMatches(t *testing.T) {
 	filters := config.HardFilters{ExcludeTitles: []string{"Junior", "Intern"}}
 	listings := []source.RawListing{
 		newListing("Senior DevOps Engineer", "Remote", ""),
@@ -102,14 +110,14 @@ func TestApplyHardFilters_ExcludeTitles_FiltersMatches(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 2 {
-		t.Fatalf("got %d listings, want 2", len(result))
+	if source.CountPassed(result) != 2 {
+		t.Fatalf("passed %d, want 2", source.CountPassed(result))
 	}
-	if result[0].Title != "Senior DevOps Engineer" {
-		t.Errorf("result[0].Title = %q, want %q", result[0].Title, "Senior DevOps Engineer")
+	if result[1].FilterReason == "" {
+		t.Error("Junior listing should be tagged")
 	}
-	if result[1].Title != "Platform Engineer" {
-		t.Errorf("result[1].Title = %q, want %q", result[1].Title, "Platform Engineer")
+	if result[2].FilterReason == "" {
+		t.Error("Intern listing should be tagged")
 	}
 }
 
@@ -121,8 +129,8 @@ func TestApplyHardFilters_ExcludeTitles_CaseInsensitive(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 1 {
-		t.Fatalf("got %d listings, want 1", len(result))
+	if source.CountPassed(result) != 1 {
+		t.Fatalf("passed %d, want 1", source.CountPassed(result))
 	}
 }
 
@@ -140,15 +148,18 @@ func TestApplyHardFilters_CombinedFilters(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 1 {
-		t.Fatalf("got %d listings, want 1 (only first passes all filters)", len(result))
+	if len(result) != 4 {
+		t.Fatalf("got %d listings, want 4 (all returned)", len(result))
 	}
-	if result[0].Title != "Senior DevOps" || result[0].Location != "Remote" {
-		t.Errorf("unexpected listing: %+v", result[0])
+	if source.CountPassed(result) != 1 {
+		t.Fatalf("passed %d, want 1 (only first passes all filters)", source.CountPassed(result))
+	}
+	if result[0].FilterReason != "" {
+		t.Errorf("first listing should pass, got reason: %q", result[0].FilterReason)
 	}
 }
 
-func TestApplyHardFilters_RemoteDescription_FiltersHybrid(t *testing.T) {
+func TestApplyHardFilters_RemoteDescription_TagsHybrid(t *testing.T) {
 	filters := config.HardFilters{Remote: true}
 	listings := []source.RawListing{
 		newListingWithDesc("DevOps Engineer", "Remote", "", "Great role. Must come into our office 3 days a week."),
@@ -159,18 +170,23 @@ func TestApplyHardFilters_RemoteDescription_FiltersHybrid(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 3 {
-		t.Fatalf("got %d listings, want 3 (filter fake-remote, keep 'hybrid' mention without 'hybrid role')", len(result))
+	if source.CountPassed(result) != 3 {
+		t.Fatalf("passed %d, want 3 (filter fake-remote, keep 'hybrid' mention without 'hybrid role')", source.CountPassed(result))
 	}
-	expected := []string{
-		"Fully remote position with async team.",
-		"We offer hybrid and remote options for all employees.",
-		"Remote-first. We have offices but attendance is optional.",
+	if result[0].FilterReason == "" {
+		t.Error("'must come into' listing should be tagged")
 	}
-	for i, exp := range expected {
-		if result[i].Description != exp {
-			t.Errorf("result[%d] = %q, want %q", i, result[i].Description, exp)
-		}
+	if result[1].FilterReason != "" {
+		t.Error("'fully remote' listing should pass")
+	}
+	if result[2].FilterReason == "" {
+		t.Error("'hybrid role' listing should be tagged")
+	}
+	if result[3].FilterReason != "" {
+		t.Error("'hybrid and remote options' listing should pass")
+	}
+	if result[4].FilterReason != "" {
+		t.Error("'remote-first' listing should pass")
 	}
 }
 
@@ -181,8 +197,8 @@ func TestApplyHardFilters_RemoteDescription_SkipsCheckWhenRemoteDisabled(t *test
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 1 {
-		t.Fatalf("got %d listings, want 1 (remote filter disabled, no description check)", len(result))
+	if source.CountPassed(result) != 1 {
+		t.Fatalf("passed %d, want 1 (remote filter disabled, no description check)", source.CountPassed(result))
 	}
 }
 
@@ -207,16 +223,16 @@ func TestApplyHardFilters_RemoteDescription_VariousPatterns(t *testing.T) {
 			newListingWithDesc("Engineer", "Remote", "", tc.desc),
 		}
 		result := source.ApplyHardFilters(listings, filters)
-		if tc.filtered && len(result) != 0 {
-			t.Errorf("expected %q to be filtered out", tc.desc)
+		if tc.filtered && result[0].FilterReason == "" {
+			t.Errorf("expected %q to be tagged as filtered", tc.desc)
 		}
-		if !tc.filtered && len(result) != 1 {
-			t.Errorf("expected %q to pass through", tc.desc)
+		if !tc.filtered && result[0].FilterReason != "" {
+			t.Errorf("expected %q to pass through, got reason: %q", tc.desc, result[0].FilterReason)
 		}
 	}
 }
 
-func TestApplyHardFilters_Countries_FiltersOutsideAllowlist(t *testing.T) {
+func TestApplyHardFilters_Countries_TagsOutsideAllowlist(t *testing.T) {
 	filters := config.HardFilters{Countries: []string{"US", "USA"}}
 	listings := []source.RawListing{
 		newListing("DevOps", "Remote, US", ""),
@@ -226,8 +242,8 @@ func TestApplyHardFilters_Countries_FiltersOutsideAllowlist(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 2 {
-		t.Fatalf("got %d listings, want 2 (only US/USA)", len(result))
+	if source.CountPassed(result) != 2 {
+		t.Fatalf("passed %d, want 2 (only US/USA)", source.CountPassed(result))
 	}
 }
 
@@ -238,8 +254,8 @@ func TestApplyHardFilters_Countries_EmptyAllowsAll(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 1 {
-		t.Fatalf("got %d listings, want 1 (no country filter)", len(result))
+	if source.CountPassed(result) != 1 {
+		t.Fatalf("passed %d, want 1 (no country filter)", source.CountPassed(result))
 	}
 }
 
@@ -250,8 +266,8 @@ func TestApplyHardFilters_Countries_CaseInsensitive(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 1 {
-		t.Fatalf("got %d listings, want 1 (case insensitive)", len(result))
+	if source.CountPassed(result) != 1 {
+		t.Fatalf("passed %d, want 1 (case insensitive)", source.CountPassed(result))
 	}
 }
 
@@ -264,8 +280,8 @@ func TestApplyHardFilters_RemotiveSource_TreatedAsRemote(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 3 {
-		t.Fatalf("got %d listings, want 3 (all remotive listings are remote by definition)", len(result))
+	if source.CountPassed(result) != 3 {
+		t.Fatalf("passed %d, want 3 (all remotive listings are remote by definition)", source.CountPassed(result))
 	}
 }
 
@@ -278,8 +294,8 @@ func TestApplyHardFilters_WorldwideMatchesAnyCountry(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 2 {
-		t.Fatalf("got %d listings, want 2 (worldwide and americas match US)", len(result))
+	if source.CountPassed(result) != 2 {
+		t.Fatalf("passed %d, want 2 (worldwide and americas match US)", source.CountPassed(result))
 	}
 }
 
@@ -291,15 +307,15 @@ func TestApplyHardFilters_RemotiveFullStack(t *testing.T) {
 		ExcludeTitles: []string{"Junior"},
 	}
 	listings := []source.RawListing{
-		newRemotiveListing("Senior DevOps", "Worldwide", ""),           // passes: remote source, worldwide, no salary = pass
-		newRemotiveListing("Senior DevOps", "Americas", "$160,000"),    // passes all
-		newRemotiveListing("Junior DevOps", "Worldwide", ""),           // fails: excluded title
-		newRemotiveListing("Senior DevOps", "Worldwide", "$80,000"),    // fails: salary
+		newRemotiveListing("Senior DevOps", "Worldwide", ""),        // passes
+		newRemotiveListing("Senior DevOps", "Americas", "$160,000"), // passes
+		newRemotiveListing("Junior DevOps", "Worldwide", ""),        // fails: title
+		newRemotiveListing("Senior DevOps", "Worldwide", "$80,000"), // fails: salary
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 2 {
-		t.Fatalf("got %d listings, want 2", len(result))
+	if source.CountPassed(result) != 2 {
+		t.Fatalf("passed %d, want 2", source.CountPassed(result))
 	}
 }
 
@@ -310,7 +326,7 @@ func TestApplyHardFilters_EmptyFilters_KeepsAll(t *testing.T) {
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 1 {
-		t.Fatalf("got %d listings, want 1 (no filters applied)", len(result))
+	if source.CountPassed(result) != 1 {
+		t.Fatalf("passed %d, want 1 (no filters applied)", source.CountPassed(result))
 	}
 }
