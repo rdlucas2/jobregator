@@ -1,0 +1,6 @@
+apiVersion: v2
+name: web-chart
+description: Generic web/long-running service chart for jobregator
+type: application
+version: 0.1.0
+appVersion: "latest"

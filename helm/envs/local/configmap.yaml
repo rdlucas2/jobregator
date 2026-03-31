@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jobregator-profile
+data:
+  profile.yaml: |
+    search_terms:
+      - "DevOps Engineer"
+      - "Platform Engineer"
+      - "Site Reliability Engineer"
+      - "Cloud Engineer"
+      - "Infrastructure Engineer"
+    hard_filters:
+      remote: true
+      countries: ["US"]
+      min_salary: 150000
+      exclude_titles: ["Junior", "Intern"]
+    profile: |
+      Senior DevOps / Platform Engineer with 10+ years experience.
+      Core strengths: CI/CD pipelines (Harness, Azure DevOps, GitHub Actions),
+      Kubernetes, Terraform, building Internal Developer Platforms (IDP),
+      developer productivity tooling, multi-cloud (Azure, AWS).
+      Languages: TypeScript, Python, Go, C#, Bash, PowerShell.
+      Experience with: SonarQube, Datadog, Grafana, OPA, Argo CD.

@@ -1,0 +1,35 @@
+image:
+  repository: ghcr.io/rdlucas2/jobregator-scraper
+  tag: latest
+
+schedule: "0 */12 * * *"
+
+env:
+  - name: NATS_URL
+    value: "nats://nats:4222"
+  - name: PROFILE_PATH
+    value: "/config/profile.yaml"
+  - name: LOOKBACK_HOURS
+    value: "14"
+  - name: ADZUNA_COUNTRY
+    value: "us"
+  - name: ADZUNA_APP_ID
+    valueFrom:
+      secretKeyRef:
+        name: jobregator-secrets
+        key: ADZUNA_APP_ID
+  - name: ADZUNA_APP_KEY
+    valueFrom:
+      secretKeyRef:
+        name: jobregator-secrets
+        key: ADZUNA_APP_KEY
+
+volumes:
+  - name: config
+    configMap:
+      name: jobregator-profile
+
+volumeMounts:
+  - name: config
+    mountPath: /config
+    readOnly: true

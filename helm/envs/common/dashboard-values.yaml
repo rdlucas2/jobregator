@@ -1,0 +1,31 @@
+image:
+  repository: ghcr.io/rdlucas2/jobregator-dashboard
+  tag: latest
+
+service:
+  port: 3000
+
+env:
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: jobregator-secrets
+        key: POSTGRES_DSN
+  - name: NATS_URL
+    value: "nats://nats:4222"
+  - name: PORT
+    value: "3000"
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10

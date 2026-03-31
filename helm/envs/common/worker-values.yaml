@@ -1,0 +1,44 @@
+image:
+  repository: ghcr.io/rdlucas2/jobregator-worker
+  tag: latest
+
+service:
+  port: 8080
+
+probesEnabled: false
+
+env:
+  - name: NATS_URL
+    value: "nats://nats:4222"
+  - name: POSTGRES_DSN
+    valueFrom:
+      secretKeyRef:
+        name: jobregator-secrets
+        key: POSTGRES_DSN
+  - name: ENABLE_ENRICHMENT
+    value: "true"
+  - name: MCP_SERVER_CMD
+    value: "python"
+  - name: MCP_SERVER_ARGS
+    value: "-m src.server"
+  - name: MCP_SERVER_WORKDIR
+    value: "/mcp-server"
+  - name: PROFILE_PATH
+    value: "/config/profile.yaml"
+  - name: ANTHROPIC_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: jobregator-secrets
+        key: ANTHROPIC_API_KEY
+  - name: CLAUDE_MODEL
+    value: "claude-sonnet-4-20250514"
+
+volumes:
+  - name: config
+    configMap:
+      name: jobregator-profile
+
+volumeMounts:
+  - name: config
+    mountPath: /config
+    readOnly: true
