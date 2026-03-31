@@ -10,6 +10,7 @@ import (
 
 func newListing(title, location, salary string) source.RawListing {
 	return source.RawListing{
+		Source:     "adzuna",
 		ExternalID: "1",
 		Title:      title,
 		Company:    "Acme",
@@ -17,6 +18,12 @@ func newListing(title, location, salary string) source.RawListing {
 		Salary:     salary,
 		PostedAt:   time.Now(),
 	}
+}
+
+func newRemotiveListing(title, location, salary string) source.RawListing {
+	l := newListing(title, location, salary)
+	l.Source = "remotive"
+	return l
 }
 
 func newListingWithDesc(title, location, salary, description string) source.RawListing {
@@ -147,18 +154,23 @@ func TestApplyHardFilters_RemoteDescription_FiltersHybrid(t *testing.T) {
 		newListingWithDesc("DevOps Engineer", "Remote", "", "Great role. Must come into our office 3 days a week."),
 		newListingWithDesc("DevOps Engineer", "Remote", "", "Fully remote position with async team."),
 		newListingWithDesc("DevOps Engineer", "Remote", "", "This is a hybrid role requiring on-site presence."),
+		newListingWithDesc("DevOps Engineer", "Remote", "", "We offer hybrid and remote options for all employees."),
 		newListingWithDesc("DevOps Engineer", "Remote", "", "Remote-first. We have offices but attendance is optional."),
 	}
 
 	result := source.ApplyHardFilters(listings, filters)
-	if len(result) != 2 {
-		t.Fatalf("got %d listings, want 2 (filter fake-remote)", len(result))
+	if len(result) != 3 {
+		t.Fatalf("got %d listings, want 3 (filter fake-remote, keep 'hybrid' mention without 'hybrid role')", len(result))
 	}
-	if result[0].Description != "Fully remote position with async team." {
-		t.Errorf("result[0] unexpected: %q", result[0].Description)
+	expected := []string{
+		"Fully remote position with async team.",
+		"We offer hybrid and remote options for all employees.",
+		"Remote-first. We have offices but attendance is optional.",
 	}
-	if result[1].Description != "Remote-first. We have offices but attendance is optional." {
-		t.Errorf("result[1] unexpected: %q", result[1].Description)
+	for i, exp := range expected {
+		if result[i].Description != exp {
+			t.Errorf("result[%d] = %q, want %q", i, result[i].Description, exp)
+		}
 	}
 }
 
@@ -240,6 +252,54 @@ func TestApplyHardFilters_Countries_CaseInsensitive(t *testing.T) {
 	result := source.ApplyHardFilters(listings, filters)
 	if len(result) != 1 {
 		t.Fatalf("got %d listings, want 1 (case insensitive)", len(result))
+	}
+}
+
+func TestApplyHardFilters_RemotiveSource_TreatedAsRemote(t *testing.T) {
+	filters := config.HardFilters{Remote: true}
+	listings := []source.RawListing{
+		newRemotiveListing("DevOps Engineer", "Worldwide", ""),
+		newRemotiveListing("Platform Engineer", "Americas, Europe", ""),
+		newRemotiveListing("SRE", "USA Only", ""),
+	}
+
+	result := source.ApplyHardFilters(listings, filters)
+	if len(result) != 3 {
+		t.Fatalf("got %d listings, want 3 (all remotive listings are remote by definition)", len(result))
+	}
+}
+
+func TestApplyHardFilters_WorldwideMatchesAnyCountry(t *testing.T) {
+	filters := config.HardFilters{Countries: []string{"US"}}
+	listings := []source.RawListing{
+		newRemotiveListing("DevOps Engineer", "Worldwide", ""),
+		newRemotiveListing("Platform Engineer", "Americas, Europe", ""),
+		newListing("SRE", "London, UK", ""),
+	}
+
+	result := source.ApplyHardFilters(listings, filters)
+	if len(result) != 2 {
+		t.Fatalf("got %d listings, want 2 (worldwide and americas match US)", len(result))
+	}
+}
+
+func TestApplyHardFilters_RemotiveFullStack(t *testing.T) {
+	filters := config.HardFilters{
+		Remote:        true,
+		Countries:     []string{"US"},
+		MinSalary:     150000,
+		ExcludeTitles: []string{"Junior"},
+	}
+	listings := []source.RawListing{
+		newRemotiveListing("Senior DevOps", "Worldwide", ""),           // passes: remote source, worldwide, no salary = pass
+		newRemotiveListing("Senior DevOps", "Americas", "$160,000"),    // passes all
+		newRemotiveListing("Junior DevOps", "Worldwide", ""),           // fails: excluded title
+		newRemotiveListing("Senior DevOps", "Worldwide", "$80,000"),    // fails: salary
+	}
+
+	result := source.ApplyHardFilters(listings, filters)
+	if len(result) != 2 {
+		t.Fatalf("got %d listings, want 2", len(result))
 	}
 }
 

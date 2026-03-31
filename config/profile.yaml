@@ -7,7 +7,7 @@ search_terms:
 
 hard_filters:
   remote: true
-  countries: ["US"]
+  countries: ["US", "USA", "United States"]
   min_salary: 150000
   exclude_titles: ["Junior", "Intern"]
 

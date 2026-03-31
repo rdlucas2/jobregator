@@ -1,6 +1,7 @@
 package source
 
 import (
+	"log"
 	"strconv"
 	"strings"
 
@@ -12,35 +13,41 @@ import (
 func ApplyHardFilters(listings []RawListing, filters config.HardFilters) []RawListing {
 	var result []RawListing
 	for _, l := range listings {
-		if passesAllFilters(l, filters) {
-			result = append(result, l)
+		if reason := failsFilter(l, filters); reason != "" {
+			log.Printf("[filter] rejected %q (%s) from %s — %s", l.Title, l.ExternalID, l.Source, reason)
+			continue
 		}
+		result = append(result, l)
 	}
 	return result
 }
 
-func passesAllFilters(l RawListing, f config.HardFilters) bool {
-	if f.Remote && !isRemote(l.Location) {
-		return false
-	}
-
-	if f.Remote && isRemote(l.Location) && descriptionContradictsRemote(l.Description) {
-		return false
+// failsFilter returns the name of the first filter the listing fails, or "" if it passes all.
+func failsFilter(l RawListing, f config.HardFilters) string {
+	if f.Remote {
+		locationRemote := isRemote(l.Location, l.Source)
+		contextRemote := isRemoteByContext(l.Title, l.Description)
+		if !locationRemote && !contextRemote {
+			return "not remote (location: " + l.Location + ")"
+		}
+		if (locationRemote || contextRemote) && descriptionContradictsRemote(l.Description) {
+			return "description contradicts remote"
+		}
 	}
 
 	if len(f.Countries) > 0 && !matchesCountry(l.Location, f.Countries) {
-		return false
+		return "country not in allowlist (location: " + l.Location + ")"
 	}
 
 	if f.MinSalary > 0 && !meetsMinSalary(l.Salary, f.MinSalary) {
-		return false
+		return "salary below minimum (salary: " + l.Salary + ")"
 	}
 
 	if len(f.ExcludeTitles) > 0 && matchesExcludedTitle(l.Title, f.ExcludeTitles) {
-		return false
+		return "excluded title"
 	}
 
-	return true
+	return ""
 }
 
 // antiRemotePatterns are phrases in job descriptions that indicate a listing
@@ -59,7 +66,10 @@ var antiRemotePatterns = []string{
 	"days on-site",
 	"days onsite",
 	"days in the office",
-	"hybrid",
+	"hybrid role",
+	"hybrid position",
+	"hybrid work",
+	"hybrid schedule",
 	"on-site requirement",
 	"onsite requirement",
 	"in-office requirement",
@@ -74,8 +84,58 @@ var antiRemotePatterns = []string{
 	"no remote",
 }
 
-func isRemote(location string) bool {
-	return strings.Contains(strings.ToLower(location), "remote")
+// remoteEquivalentLocations are location terms that imply remote even without
+// the word "remote" (e.g., Remotive uses "Worldwide" for all listings).
+var remoteEquivalentLocations = []string{
+	"remote", "worldwide", "anywhere", "global",
+}
+
+// remoteByDefinitionSources are job sources where ALL listings are remote.
+var remoteByDefinitionSources = []string{
+	"remotive",
+}
+
+func isRemote(location string, jobSource string) bool {
+	sourceLower := strings.ToLower(jobSource)
+	for _, s := range remoteByDefinitionSources {
+		if sourceLower == s {
+			return true
+		}
+	}
+
+	lower := strings.ToLower(location)
+	for _, term := range remoteEquivalentLocations {
+		if strings.Contains(lower, term) {
+			return true
+		}
+	}
+	return false
+}
+
+// isRemoteByContext checks title and description for remote indicators when
+// the location field alone doesn't say "remote" (common with Adzuna).
+func isRemoteByContext(title, description string) bool {
+	titleLower := strings.ToLower(title)
+	if strings.Contains(titleLower, "remote") {
+		return true
+	}
+	descLower := strings.ToLower(description)
+	remoteIndicators := []string{
+		"100% remote",
+		"fully remote",
+		"remote position",
+		"remote role",
+		"remote opportunity",
+		"work from home",
+		"work from anywhere",
+		"work remotely",
+	}
+	for _, indicator := range remoteIndicators {
+		if strings.Contains(descLower, indicator) {
+			return true
+		}
+	}
+	return false
 }
 
 // descriptionContradictsRemote checks if the description contains
@@ -122,8 +182,45 @@ func parseSalaryMin(salary string) int {
 	return val
 }
 
+// globalLocations are location terms that imply the position is open to all countries.
+var globalLocations = []string{
+	"worldwide", "anywhere", "global",
+}
+
+// regionToCountries maps broad region names to the countries they include,
+// so "Americas" matches a country filter for "US", "USA", "Canada", etc.
+var regionToCountries = map[string][]string{
+	"americas":      {"us", "usa", "united states", "canada", "brazil", "mexico"},
+	"north america": {"us", "usa", "united states", "canada", "mexico"},
+	"europe":        {"uk", "germany", "france", "spain", "netherlands", "ireland", "sweden", "poland"},
+	"emea":          {"uk", "germany", "france", "spain", "netherlands", "ireland"},
+}
+
 func matchesCountry(location string, countries []string) bool {
 	lower := strings.ToLower(location)
+
+	// Global locations match any country
+	for _, g := range globalLocations {
+		if strings.Contains(lower, g) {
+			return true
+		}
+	}
+
+	// Check if a region in the location maps to one of the allowed countries
+	for region, regionCountries := range regionToCountries {
+		if strings.Contains(lower, region) {
+			for _, allowed := range countries {
+				allowedLower := strings.ToLower(allowed)
+				for _, rc := range regionCountries {
+					if rc == allowedLower {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	// Direct country match
 	for _, country := range countries {
 		if strings.Contains(lower, strings.ToLower(country)) {
 			return true

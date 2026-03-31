@@ -19,7 +19,7 @@ func main() {
 	adzunaAppKey := os.Getenv("ADZUNA_APP_KEY")
 	adzunaCountry := envOrDefault("ADZUNA_COUNTRY", "us")
 	remotiveCategories := envOrDefault("REMOTIVE_CATEGORIES", "devops")
-	lookbackHours := envOrDefaultInt("LOOKBACK_HOURS", 14)
+	lookbackHours := envOrDefaultInt("LOOKBACK_HOURS", 48)
 
 	if adzunaAppID == "" || adzunaAppKey == "" {
 		log.Println("warning: ADZUNA_APP_ID/KEY not set, Adzuna source disabled")
