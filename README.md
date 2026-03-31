@@ -1,271 +1,155 @@
-# [app-name]
+# Jobregator
 
-> Replace this line with a one-sentence description of what your application does.
+> A personal job listing aggregator that scrapes postings, enriches them with AI-powered relevance scoring, and delivers high-scoring matches via Discord and a web dashboard.
 
-This repository is a **GitHub template** providing a language-agnostic project scaffold with:
+## Architecture
 
-- Multi-stage Docker build (base → test → artifact)
-- Makefile with build, test, package, debug, static analysis, and CVE scanning targets
-- Pre-commit secret scanning via [gitleaks](https://github.com/gitleaks/gitleaks)
-- `.env`-based local configuration (never committed)
-- A curated set of Claude Code skills for AI-assisted development
-
----
-
-## Getting Started
-
-### 1. Use this template
-
-Click **Use this template** on GitHub, or clone directly:
-
-```bash
-git clone https://github.com/<your-org>/<your-repo>.git
-cd <your-repo>
+```
+Adzuna API ─→ Go Scraper ─→ NATS (jobs.raw) ─→ Python Worker ─→ Postgres
+                                                     │
+                                              MCP Server (Claude API)
+                                                     │
+                                              NATS (jobs.enriched)
+                                               ┌─────┴─────┐
+                                         Discord Notifier   Dashboard (SSE)
 ```
 
-### 2. Set up your environment
+Five services, three languages:
 
-Copy the example env file and fill in your values:
+| Service | Language | Description |
+|---------|----------|-------------|
+| **scraper** | Go | Fetches listings from Adzuna API, applies hard filters (remote, salary, country, title keywords, description-based remote validation), publishes to NATS |
+| **worker** | Python | MCP client that deduplicates, enriches via Claude API, writes to Postgres, publishes enriched listings |
+| **mcp-server** | Python | MCP server exposing `analyze_job` and `score_job_fit` tools wrapping the Claude API |
+| **notifier** | Python | Subscribes to enriched listings, sends Discord webhook for high-scoring matches |
+| **dashboard** | TypeScript | Hono + htmx web UI with filtering, sorting, charts, and SSE live updates |
+
+## Quick Start
+
+### Prerequisites
+
+- [Docker](https://www.docker.com/) and Docker Compose
+- [make](https://www.gnu.org/software/make/)
+
+### Setup
 
 ```bash
+# Clone and configure
+git clone https://github.com/rdlucas2/jobregator.git
+cd jobregator
 cp .env.example .env
-```
+# Edit .env with your API keys (Adzuna, Anthropic, Discord webhook)
 
-Edit `.env` — see [Environment Variables](#environment-variables) for what each value does.
-
-### 3. Install git hooks
-
-Run once after cloning to enable the gitleaks pre-commit secret scan:
-
-```bash
+# Install git hooks (gitleaks pre-commit secret scanning)
 make install-hooks
+
+# Start everything
+make up
 ```
 
-This sets `core.hooksPath = .githooks` in your local git config. From this point, every `git commit` will scan staged files for secrets before allowing the commit through.
+The dashboard is available at [http://localhost:3000](http://localhost:3000).
 
-### 4. Verify everything works
+### Environment Variables
 
-```bash
-make help      # list all available targets
-make build     # build the artifact image
-make test      # run tests (writes coverage to ./coverage/)
+See `.env.example` for all required variables. Key ones:
+
+| Variable | Description |
+|----------|-------------|
+| `ADZUNA_APP_ID` / `ADZUNA_APP_KEY` | Adzuna API credentials |
+| `ANTHROPIC_API_KEY` | Claude API key for job enrichment |
+| `DISCORD_WEBHOOK_URL` | Discord channel webhook for notifications |
+| `ENABLE_ENRICHMENT` | Toggle AI enrichment on/off (`true`/`false`) |
+| `FIT_SCORE_THRESHOLD` | Minimum score to trigger Discord notification (default `0.7`) |
+| `LOOKBACK_HOURS` | How far back to fetch listings (default `14`) |
+
+## Repository Structure
+
 ```
-
----
+jobregator/
+├── services/
+│   ├── scraper/          # Go — Adzuna adapter, NATS publisher, hard filters
+│   ├── worker/           # Python — MCP client, dedup, Postgres writer
+│   ├── mcp-server/       # Python — Claude API enrichment tools
+│   ├── notifier/         # Python — Discord webhook notifications
+│   └── dashboard/        # TypeScript — Hono + htmx web UI
+├── config/
+│   └── profile.yaml      # Search terms, hard filters, candidate profile
+├── helm/
+│   ├── web-chart/        # Generic Deployment/Service/Ingress chart
+│   ├── job-chart/        # Generic CronJob chart
+│   └── envs/             # Per-environment values (common/, local/)
+├── argo/
+│   └── bootstrap-local/  # ArgoCD App of Apps for Docker Desktop K8s
+├── .github/workflows/    # Per-service CI: build → test → scan → push
+├── docker-compose.yaml   # Local development orchestration
+└── Makefile              # Build, test, and utility targets
+```
 
 ## Makefile Reference
 
-Run `make help` at any time to see all targets and descriptions.
+```bash
+make help              # Show all targets
+make up                # Start all services (docker compose up -d --build)
+make down              # Stop all services
+make logs              # Tail logs
 
+make build-scraper     # Build a single service image
+make test-dashboard    # Run tests for a single service
+make build             # Build all service images
+make test              # Run all service tests
+
+make trivy-scan-scraper  # CVE scan a service image
+make gitleaks-scan       # Scan repo for secrets
 ```
-make help
+
+## Configuration
+
+The scraper is configured via `config/profile.yaml`:
+
+```yaml
+search_terms:
+  - "DevOps Engineer"
+  - "Platform Engineer"
+hard_filters:
+  remote: true
+  countries: ["US"]
+  min_salary: 150000
+  exclude_titles: ["Junior", "Intern"]
+profile: |
+  Senior DevOps / Platform Engineer with 10+ years experience...
 ```
 
-### Build
+The `profile` field is sent to the Claude API for relevance scoring. Hard filters are applied at the scraper level before any API calls.
 
-| Target | Description |
-|---|---|
-| `make build` | Build the production artifact image |
-| `make build-test` | Build the test image (targets the `test` stage) |
+## Deployment
 
-### Test
-
-| Target | Description |
-|---|---|
-| `make test` | Run tests inside the test container; writes coverage reports to `./coverage/` |
-
-### Package
-
-| Target | Description |
-|---|---|
-| `make package` | Tag and push the artifact image to `REGISTRY` |
-
-### Run & Debug Locally
-
-| Target | Description |
-|---|---|
-| `make run` | Run the artifact container, loading `.env` and binding `PORT` |
-| `make debug` | Open an interactive shell in the artifact container |
-| `make debug-test` | Open an interactive shell in the test container |
-
-### Static Analysis & CVE Scanning
-
-| Target | Description |
-|---|---|
-| `make sonar-start` | Start a local SonarQube instance at [http://localhost:9000](http://localhost:9000) |
-| `make sonar-scan` | Run SonarQube static analysis (requires `SONAR_TOKEN` in `.env`) |
-| `make trivy-scan` | Scan the artifact image for CVEs; writes `trivy-report.txt` and `trivy-report.json` |
-
-### Git Hooks
-
-| Target | Description |
-|---|---|
-| `make install-hooks` | Configure git to use `.githooks/` (run once after cloning) |
-| `make gitleaks-scan` | Scan the full repository history for secrets on demand |
-
----
-
-## Working Locally
-
-### Building the application
+### Docker Compose (local development)
 
 ```bash
-make build
+make up
 ```
 
-Builds the `artifact` stage of the Dockerfile and tags it `<APP_NAME>:<IMAGE_TAG>`.
+### Kubernetes + ArgoCD
 
-To override defaults without editing `.env`:
+For Docker Desktop K8s with ArgoCD:
 
 ```bash
-make build APP_NAME=myapp IMAGE_TAG=v1.2.3
+# Apply ConfigMap and Secret
+kubectl apply -f helm/envs/local/configmap.yaml
+# Create secret.yaml from secret.yaml.example, fill in values, then:
+kubectl apply -f helm/envs/local/secret.yaml
+
+# Bootstrap ArgoCD App of Apps
+helm install bootstrap argo/bootstrap-local
 ```
 
-### Running tests
+ArgoCD will auto-sync all services with prune and self-heal enabled.
 
-```bash
-make test
-```
+## CI/CD
 
-Builds the `test` stage and runs it. Coverage reports are written to `./coverage/` on your host (mounted as `/out` inside the container).
+GitHub Actions workflows in `.github/workflows/` trigger on path-based changes per service:
 
-To inspect the test environment interactively:
-
-```bash
-make debug-test
-```
-
-### Packaging and pushing
-
-Ensure `REGISTRY` is set in `.env` (e.g. `ghcr.io/your-org`), then:
-
-```bash
-make package
-```
-
-This tags the locally-built image and pushes it to your registry.
-
-### Running the application
-
-```bash
-make run
-```
-
-Runs the artifact container with your `.env` values injected and `PORT` bound on the host. To get a shell inside the running artifact image instead:
-
-```bash
-make debug
-```
-
-### Scanning for CVEs
-
-```bash
-make trivy-scan
-```
-
-Produces `trivy-report.txt` (human-readable table) and `trivy-report.json` in the project root. Both are git-ignored.
-
-### Static code analysis with SonarQube
-
-```bash
-# 1. Start SonarQube (first time only, or after `docker rm sonarqube`)
-make sonar-start
-
-# 2. Monitor startup
-docker logs -f sonarqube
-
-# 3. Browse http://localhost:9000 (admin / admin), generate a token, add it to .env:
-#    SONAR_TOKEN=<your-token>
-
-# 4. Run the scan
-make sonar-scan
-```
-
----
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and update these values:
-
-| Variable | Description | Example |
-|---|---|---|
-| `APP_NAME` | Docker image name | `myapp` |
-| `IMAGE_TAG` | Docker image tag | `latest` or `v1.0.0` |
-| `PORT` | Port the application listens on | `8080` |
-| `REGISTRY` | Container registry prefix for `make package` | `ghcr.io/your-org` |
-| `SONAR_TOKEN` | SonarQube authentication token for `make sonar-scan` | *(generate at localhost:9000)* |
-
-`.env` is git-ignored and docker-ignored. **Never commit it.**
-
----
-
-## Updating the Placeholders
-
-When you start building your actual application, work through the following checklist.
-
-### `Dockerfile`
-
-The Dockerfile has three stages, each with `TODO` comments guiding what to fill in:
-
-**Stage 1 — `base`** (production build)
-- [ ] Replace `FROM alpine:3.21.3` with your language's builder image (e.g. `golang:1.23.4-alpine`, `node:22.12.0-alpine`, `python:3.13.1-slim`) — keep the version pinned
-- [ ] Copy your dependency manifest first (e.g. `go.mod`/`go.sum`, `package.json`/`package-lock.json`, `requirements.txt`) and install dependencies before copying source — this preserves the cache layer
-- [ ] Copy source and add the build command for your language
-- [ ] Remove the placeholder `RUN echo "base layer placeholder"` line
-
-**Stage 2 — `test`** (test runner)
-- [ ] Install your test runner / coverage tool (e.g. `gotestsum`, `jest`, `pytest`)
-- [ ] Replace the placeholder `ENTRYPOINT` with your test command, writing results to `/out/` so `make test` can retrieve them from the host mount
-
-**Stage 3 — `artifact`** (distributable)
-- [ ] Add `COPY --from=base` lines for your compiled binary and any required static assets
-- [ ] Update `EXPOSE` to match your actual application port
-- [ ] Replace the placeholder `ENTRYPOINT` with your real startup command
-
-### `Makefile`
-
-- [ ] Update `APP_NAME` default (currently `jobregator`) to your project name
-- [ ] Update `PORT` default if your application uses a different port
-- [ ] Update `REGISTRY` default to your container registry
-
-### `.env.example`
-
-- [ ] Update `APP_NAME`, `PORT`, and `REGISTRY` to match your project defaults
-- [ ] Add any application-specific environment variables your app needs (database URLs, API keys, feature flags, etc.) with placeholder/example values
-
-### `CLAUDE.md`
-
-- [ ] The ground rules are project-agnostic and can stay as-is
-- [ ] Add any project-specific conventions, naming rules, or instructions for the AI assistant relevant to your application
-
-### Skills
-
-The `.claude/skills/` directory contains a curated set of AI assistant skills. Review and remove any that aren't relevant to your stack:
-
-| Skill | Keep if... |
-|---|---|
-| `accessibility` | You're building a web UI |
-| `code-review` | Always useful |
-| `conventional-commits` | Always — enforced by ground rules |
-| `design-an-interface` | You're designing APIs or modules |
-| `docker-best-practices` | Always — you have a Dockerfile |
-| `makefile-best-practices` | Always — you have a Makefile |
-| `twelve-factor` | You're building cloud-native / containerised apps |
-| `tdd` | You're doing test-driven development |
-| `triage-issue` | You're using GitHub Issues |
-| `prd-to-issues` / `prd-to-plan` | You're writing PRDs |
-| `qa` | You want conversational bug filing |
-
----
-
-## Prerequisites
-
-- [Docker](https://www.docker.com/) — required for all build, test, and scan targets
-- [make](https://www.gnu.org/software/make/) — available by default on macOS and Linux; Windows users can use WSL or [GnuWin32](http://gnuwin32.sourceforge.net/packages/make.htm)
-- [gitleaks](https://github.com/gitleaks/gitleaks#installing) *(optional)* — used by the pre-commit hook; Docker is used as a fallback if not installed locally
-
----
-
-## License
-
-[MIT](LICENSE) — or replace with your preferred license.
+1. Build multi-stage Docker image
+2. Run tests (target: `test`)
+3. Trivy security scan (CRITICAL + HIGH)
+4. Push to `ghcr.io/rdlucas2` (main branch and tags only)
