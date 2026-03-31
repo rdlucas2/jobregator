@@ -28,6 +28,10 @@ func passesAllFilters(l RawListing, f config.HardFilters) bool {
 		return false
 	}
 
+	if len(f.Countries) > 0 && !matchesCountry(l.Location, f.Countries) {
+		return false
+	}
+
 	if f.MinSalary > 0 && !meetsMinSalary(l.Salary, f.MinSalary) {
 		return false
 	}
@@ -116,6 +120,16 @@ func parseSalaryMin(salary string) int {
 		return 0
 	}
 	return val
+}
+
+func matchesCountry(location string, countries []string) bool {
+	lower := strings.ToLower(location)
+	for _, country := range countries {
+		if strings.Contains(lower, strings.ToLower(country)) {
+			return true
+		}
+	}
+	return false
 }
 
 func matchesExcludedTitle(title string, excludes []string) bool {

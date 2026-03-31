@@ -204,6 +204,45 @@ func TestApplyHardFilters_RemoteDescription_VariousPatterns(t *testing.T) {
 	}
 }
 
+func TestApplyHardFilters_Countries_FiltersOutsideAllowlist(t *testing.T) {
+	filters := config.HardFilters{Countries: []string{"US", "USA"}}
+	listings := []source.RawListing{
+		newListing("DevOps", "Remote, US", ""),
+		newListing("DevOps", "Remote, USA", ""),
+		newListing("DevOps", "London, UK", ""),
+		newListing("DevOps", "Remote, Canada", ""),
+	}
+
+	result := source.ApplyHardFilters(listings, filters)
+	if len(result) != 2 {
+		t.Fatalf("got %d listings, want 2 (only US/USA)", len(result))
+	}
+}
+
+func TestApplyHardFilters_Countries_EmptyAllowsAll(t *testing.T) {
+	filters := config.HardFilters{Countries: []string{}}
+	listings := []source.RawListing{
+		newListing("DevOps", "London, UK", ""),
+	}
+
+	result := source.ApplyHardFilters(listings, filters)
+	if len(result) != 1 {
+		t.Fatalf("got %d listings, want 1 (no country filter)", len(result))
+	}
+}
+
+func TestApplyHardFilters_Countries_CaseInsensitive(t *testing.T) {
+	filters := config.HardFilters{Countries: []string{"us"}}
+	listings := []source.RawListing{
+		newListing("DevOps", "Remote, US", ""),
+	}
+
+	result := source.ApplyHardFilters(listings, filters)
+	if len(result) != 1 {
+		t.Fatalf("got %d listings, want 1 (case insensitive)", len(result))
+	}
+}
+
 func TestApplyHardFilters_EmptyFilters_KeepsAll(t *testing.T) {
 	filters := config.HardFilters{}
 	listings := []source.RawListing{
