@@ -19,6 +19,12 @@ func newListing(title, location, salary string) source.RawListing {
 	}
 }
 
+func newListingWithDesc(title, location, salary, description string) source.RawListing {
+	l := newListing(title, location, salary)
+	l.Description = description
+	return l
+}
+
 func TestApplyHardFilters_RemoteOnly_KeepsRemoteListings(t *testing.T) {
 	filters := config.HardFilters{Remote: true}
 	listings := []source.RawListing{
@@ -132,6 +138,69 @@ func TestApplyHardFilters_CombinedFilters(t *testing.T) {
 	}
 	if result[0].Title != "Senior DevOps" || result[0].Location != "Remote" {
 		t.Errorf("unexpected listing: %+v", result[0])
+	}
+}
+
+func TestApplyHardFilters_RemoteDescription_FiltersHybrid(t *testing.T) {
+	filters := config.HardFilters{Remote: true}
+	listings := []source.RawListing{
+		newListingWithDesc("DevOps Engineer", "Remote", "", "Great role. Must come into our office 3 days a week."),
+		newListingWithDesc("DevOps Engineer", "Remote", "", "Fully remote position with async team."),
+		newListingWithDesc("DevOps Engineer", "Remote", "", "This is a hybrid role requiring on-site presence."),
+		newListingWithDesc("DevOps Engineer", "Remote", "", "Remote-first. We have offices but attendance is optional."),
+	}
+
+	result := source.ApplyHardFilters(listings, filters)
+	if len(result) != 2 {
+		t.Fatalf("got %d listings, want 2 (filter fake-remote)", len(result))
+	}
+	if result[0].Description != "Fully remote position with async team." {
+		t.Errorf("result[0] unexpected: %q", result[0].Description)
+	}
+	if result[1].Description != "Remote-first. We have offices but attendance is optional." {
+		t.Errorf("result[1] unexpected: %q", result[1].Description)
+	}
+}
+
+func TestApplyHardFilters_RemoteDescription_SkipsCheckWhenRemoteDisabled(t *testing.T) {
+	filters := config.HardFilters{Remote: false}
+	listings := []source.RawListing{
+		newListingWithDesc("DevOps Engineer", "Remote", "", "Must come into our office 3 days a week."),
+	}
+
+	result := source.ApplyHardFilters(listings, filters)
+	if len(result) != 1 {
+		t.Fatalf("got %d listings, want 1 (remote filter disabled, no description check)", len(result))
+	}
+}
+
+func TestApplyHardFilters_RemoteDescription_VariousPatterns(t *testing.T) {
+	filters := config.HardFilters{Remote: true}
+
+	patterns := []struct {
+		desc     string
+		filtered bool
+	}{
+		{"Must relocate to Austin, TX", true},
+		{"3 days per week in office required", true},
+		{"This is not a remote position despite the tag", true},
+		{"Relocation required for this role", true},
+		{"Must be based in the greater NYC area", true},
+		{"Work from anywhere in the US", false},
+		{"100% distributed team", false},
+	}
+
+	for _, tc := range patterns {
+		listings := []source.RawListing{
+			newListingWithDesc("Engineer", "Remote", "", tc.desc),
+		}
+		result := source.ApplyHardFilters(listings, filters)
+		if tc.filtered && len(result) != 0 {
+			t.Errorf("expected %q to be filtered out", tc.desc)
+		}
+		if !tc.filtered && len(result) != 1 {
+			t.Errorf("expected %q to pass through", tc.desc)
+		}
 	}
 }
 

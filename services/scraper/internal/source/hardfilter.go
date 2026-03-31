@@ -24,6 +24,10 @@ func passesAllFilters(l RawListing, f config.HardFilters) bool {
 		return false
 	}
 
+	if f.Remote && isRemote(l.Location) && descriptionContradictsRemote(l.Description) {
+		return false
+	}
+
 	if f.MinSalary > 0 && !meetsMinSalary(l.Salary, f.MinSalary) {
 		return false
 	}
@@ -35,8 +39,51 @@ func passesAllFilters(l RawListing, f config.HardFilters) bool {
 	return true
 }
 
+// antiRemotePatterns are phrases in job descriptions that indicate a listing
+// tagged as "remote" is actually hybrid or on-site.
+var antiRemotePatterns = []string{
+	"must come into",
+	"must be in office",
+	"must be on-site",
+	"must be onsite",
+	"required to be in office",
+	"required to be on-site",
+	"required to be onsite",
+	"days per week in office",
+	"days a week in office",
+	"days in office",
+	"days on-site",
+	"days onsite",
+	"days in the office",
+	"hybrid",
+	"on-site requirement",
+	"onsite requirement",
+	"in-office requirement",
+	"relocation required",
+	"must relocate",
+	"must be located in",
+	"must be based in",
+	"must reside in",
+	"office-based",
+	"not remote",
+	"not a remote",
+	"no remote",
+}
+
 func isRemote(location string) bool {
 	return strings.Contains(strings.ToLower(location), "remote")
+}
+
+// descriptionContradictsRemote checks if the description contains
+// anti-remote language that contradicts a "remote" location tag.
+func descriptionContradictsRemote(description string) bool {
+	lower := strings.ToLower(description)
+	for _, pattern := range antiRemotePatterns {
+		if strings.Contains(lower, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 func meetsMinSalary(salary string, minSalary int) bool {

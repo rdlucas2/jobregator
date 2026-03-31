@@ -1,4 +1,5 @@
 import { html, raw } from "hono/html";
+import type { ScoreBucket, DailyCount, TopCompany } from "./db.js";
 
 export interface Listing {
   id: number;
@@ -12,24 +13,37 @@ export interface Listing {
   posted_at: string;
   fit_score: number | null;
   enriched_json: Record<string, unknown> | null;
+  description?: string;
 }
 
-function scoreColor(score: number | null): string {
+export function scoreColor(score: number | null): string {
   if (score === null) return "#999";
   if (score >= 0.8) return "#2ecc71";
   if (score >= 0.6) return "#f1c40f";
   return "#e74c3c";
 }
 
-function scoreDisplay(score: number | null): string {
+export function scoreDisplay(score: number | null): string {
   if (score === null) return "—";
   return score.toFixed(2);
 }
 
-function formatDate(dateStr: string): string {
+export function formatDate(dateStr: string): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function listingRow(l: Listing): string {
+  return html`<tr>
+    <td><a href="/listings/${l.id}">${l.title}</a></td>
+    <td>${l.company}</td>
+    <td>${l.location}</td>
+    <td><span class="score" style="color: ${scoreColor(l.fit_score)}">${scoreDisplay(l.fit_score)}</span></td>
+    <td>${l.salary}</td>
+    <td><span class="badge">${l.source}</span></td>
+    <td>${formatDate(l.posted_at)}</td>
+  </tr>`.toString();
 }
 
 export function layout(title: string, content: string): string {
@@ -40,6 +54,7 @@ export function layout(title: string, content: string): string {
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>${title}</title>
         <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+        <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
         <style>
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f1117; color: #e1e1e6; line-height: 1.6; }
@@ -77,6 +92,26 @@ export function layout(title: string, content: string): string {
           .pagination button:hover { background: #238636; border-color: #238636; }
           .pagination button.active { background: #238636; border-color: #238636; }
 
+          .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+          .chart-card { background: #161b22; border-radius: 8px; padding: 1rem; }
+          .chart-card h3 { font-size: 0.85rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.75rem; }
+          .bar-chart { display: flex; flex-direction: column; gap: 0.4rem; }
+          .bar-row { display: flex; align-items: center; gap: 0.5rem; }
+          .bar-label { width: 70px; font-size: 0.8rem; color: #aaa; text-align: right; flex-shrink: 0; }
+          .bar-track { flex: 1; height: 20px; background: #1c1f26; border-radius: 3px; overflow: hidden; }
+          .bar-fill { height: 100%; border-radius: 3px; min-width: 2px; transition: width 0.3s; }
+          .bar-value { width: 35px; font-size: 0.8rem; color: #e1e1e6; }
+
+          th.sortable { cursor: pointer; user-select: none; }
+          th.sortable:hover { color: #58a6ff; }
+          th .sort-arrow { font-size: 0.7rem; margin-left: 0.3rem; }
+
+          @keyframes flash-new { from { background: #1a3a2a; } to { background: transparent; } }
+          tr.new-row { animation: flash-new 2s ease-out; }
+
+          .live-badge { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #2ecc71; margin-right: 0.4rem; animation: pulse 2s infinite; }
+          @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
           .htmx-indicator { display: none; }
           .htmx-request .htmx-indicator { display: inline; }
           .htmx-request.htmx-indicator { display: inline; }
@@ -90,29 +125,35 @@ export function layout(title: string, content: string): string {
     </html>`.toString();
 }
 
-export function listingTable(listings: Listing[], page: number, totalPages: number): string {
-  const rows = listings
-    .map(
-      (l) => html`<tr>
-        <td><a href="/listings/${l.id}">${l.title}</a></td>
-        <td>${l.company}</td>
-        <td>${l.location}</td>
-        <td><span class="score" style="color: ${scoreColor(l.fit_score)}">${scoreDisplay(l.fit_score)}</span></td>
-        <td>${l.salary}</td>
-        <td><span class="badge">${l.source}</span></td>
-        <td>${formatDate(l.posted_at)}</td>
-      </tr>`,
-    )
-    .join("\n");
+export interface SortState {
+  sortBy: string;
+  sortOrder: string;
+}
+
+function sortHeader(label: string, column: string, sort: SortState): string {
+  const isActive = sort.sortBy === column;
+  const nextOrder = isActive && sort.sortOrder === "desc" ? "asc" : isActive && sort.sortOrder === "asc" ? "desc" : "desc";
+  const arrow = isActive ? (sort.sortOrder === "asc" ? " &#9650;" : " &#9660;") : "";
+  return html`<th class="sortable"
+    hx-get="/listings?sort_by=${column}&sort_order=${nextOrder}"
+    hx-target="#listing-results"
+    hx-swap="innerHTML"
+    hx-include=".filters"
+  >${label}<span class="sort-arrow">${raw(arrow)}</span></th>`.toString();
+}
+
+export function listingTable(listings: Listing[], page: number, totalPages: number, sort: SortState = { sortBy: "fit_score", sortOrder: "desc" }): string {
+  const rows = listings.map((l) => listingRow(l)).join("\n");
 
   const pagination = totalPages > 1
     ? html`<div class="pagination">
         ${raw(Array.from({ length: totalPages }, (_, i) => i + 1)
           .map(
             (p) => html`<button
-              hx-get="/listings?page=${p}"
+              hx-get="/listings?page=${p}&sort_by=${sort.sortBy}&sort_order=${sort.sortOrder}"
               hx-target="#listing-results"
               hx-swap="innerHTML"
+              hx-include=".filters"
               class="${p === page ? "active" : ""}"
             >${p}</button>`,
           )
@@ -123,20 +164,66 @@ export function listingTable(listings: Listing[], page: number, totalPages: numb
   return html`<table>
       <thead>
         <tr>
-          <th>Title</th>
-          <th>Company</th>
-          <th>Location</th>
-          <th>Score</th>
-          <th>Salary</th>
-          <th>Source</th>
-          <th>Posted</th>
+          ${raw(sortHeader("Title", "title", sort))}
+          ${raw(sortHeader("Company", "company", sort))}
+          ${raw(sortHeader("Location", "location", sort))}
+          ${raw(sortHeader("Score", "fit_score", sort))}
+          ${raw(sortHeader("Salary", "salary", sort))}
+          ${raw(sortHeader("Source", "source", sort))}
+          ${raw(sortHeader("Posted", "posted_at", sort))}
         </tr>
       </thead>
-      <tbody>
+      <tbody id="listing-tbody"
+             hx-ext="sse"
+             sse-connect="/events"
+             sse-swap="new-listing"
+             hx-swap="afterbegin">
         ${raw(rows)}
       </tbody>
     </table>
     ${pagination}`.toString();
+}
+
+const scoreColors: Record<string, string> = {
+  "0.0-0.3": "#e74c3c",
+  "0.3-0.6": "#f1c40f",
+  "0.6-0.8": "#e67e22",
+  "0.8-1.0": "#2ecc71",
+  "Unscored": "#555",
+};
+
+export function chartsSection(scores: ScoreBucket[], daily: DailyCount[], topCompanies: TopCompany[]): string {
+  const maxScore = Math.max(...scores.map((s) => Number(s.count)), 1);
+  const scoreChart = scores
+    .map((s) => {
+      const pct = (Number(s.count) / maxScore) * 100;
+      const color = scoreColors[s.label] ?? "#58a6ff";
+      return `<div class="bar-row"><span class="bar-label">${s.label}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div><span class="bar-value">${s.count}</span></div>`;
+    })
+    .join("");
+
+  const maxDaily = Math.max(...daily.map((d) => Number(d.count)), 1);
+  const dailyChart = daily
+    .map((d) => {
+      const pct = (Number(d.count) / maxDaily) * 100;
+      const label = new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      return `<div class="bar-row"><span class="bar-label">${label}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:#58a6ff"></div></div><span class="bar-value">${d.count}</span></div>`;
+    })
+    .join("");
+
+  const maxCompany = Math.max(...topCompanies.map((c) => Number(c.count)), 1);
+  const companyChart = topCompanies
+    .map((c) => {
+      const pct = (Number(c.count) / maxCompany) * 100;
+      return `<div class="bar-row"><span class="bar-label" style="width:120px" title="${c.company}">${c.company.length > 15 ? c.company.slice(0, 14) + "…" : c.company}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:#9b59b6"></div></div><span class="bar-value">${c.count}</span></div>`;
+    })
+    .join("");
+
+  return `<div class="charts">
+    <div class="chart-card"><h3>Score Distribution</h3><div class="bar-chart">${scoreChart}</div></div>
+    <div class="chart-card"><h3>Listings Per Day</h3><div class="bar-chart">${dailyChart}</div></div>
+    <div class="chart-card"><h3>Top Companies</h3><div class="bar-chart">${companyChart}</div></div>
+  </div>`;
 }
 
 export function listingDetail(listing: Listing): string {
