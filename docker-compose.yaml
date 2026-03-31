@@ -28,7 +28,9 @@ services:
       ADZUNA_APP_ID: ${ADZUNA_APP_ID}
       ADZUNA_APP_KEY: ${ADZUNA_APP_KEY}
       ADZUNA_COUNTRY: ${ADZUNA_COUNTRY:-us}
-      REMOTIVE_CATEGORIES: ${REMOTIVE_CATEGORIES:-devops}
+      REMOTIVE_CATEGORIES: ${REMOTIVE_CATEGORIES:-devops,software-development,data,qa}
+      JOBICY_INDUSTRIES: ${JOBICY_INDUSTRIES:-admin,engineering,dev}
+      JOBICY_GEO: ${JOBICY_GEO:-usa}
       LOOKBACK_HOURS: ${LOOKBACK_HOURS:-48}
       PROFILE_PATH: /config/profile.yaml
     volumes:

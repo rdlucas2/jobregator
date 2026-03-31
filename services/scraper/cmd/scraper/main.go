@@ -18,7 +18,9 @@ func main() {
 	adzunaAppID := os.Getenv("ADZUNA_APP_ID")
 	adzunaAppKey := os.Getenv("ADZUNA_APP_KEY")
 	adzunaCountry := envOrDefault("ADZUNA_COUNTRY", "us")
-	remotiveCategories := envOrDefault("REMOTIVE_CATEGORIES", "devops")
+	remotiveCategories := envOrDefault("REMOTIVE_CATEGORIES", "devops,software-development,data,qa")
+	jobicyIndustries := envOrDefault("JOBICY_INDUSTRIES", "admin,engineering,dev")
+	jobicyGeo := envOrDefault("JOBICY_GEO", "usa")
 	lookbackHours := envOrDefaultInt("LOOKBACK_HOURS", 48)
 
 	if adzunaAppID == "" || adzunaAppKey == "" {
@@ -54,6 +56,12 @@ func main() {
 		cats = strings.Split(remotiveCategories, ",")
 	}
 	sources = append(sources, source.NewRemotiveSource(cats))
+
+	var industries []string
+	if jobicyIndustries != "" {
+		industries = strings.Split(jobicyIndustries, ",")
+	}
+	sources = append(sources, source.NewJobicySource(industries, jobicyGeo))
 
 	totalPublished := 0
 

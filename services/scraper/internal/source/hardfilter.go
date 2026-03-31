@@ -93,6 +93,7 @@ var remoteEquivalentLocations = []string{
 // remoteByDefinitionSources are job sources where ALL listings are remote.
 var remoteByDefinitionSources = []string{
 	"remotive",
+	"jobicy",
 }
 
 func isRemote(location string, jobSource string) bool {
