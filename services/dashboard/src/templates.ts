@@ -292,6 +292,8 @@ export function listingDetail(listing: Listing): string {
           : ""
       }
 
+      ${listing.description ? html`<div style="margin-top: 1rem;"><dt style="font-size: 0.8rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em;">Description</dt><div style="margin-top: 0.25rem; white-space: pre-wrap; color: #ccc; font-size: 0.9rem; line-height: 1.7;">${listing.description}</div></div>` : ""}
+
       ${summary ? html`<div style="margin-top: 1rem;"><dt style="font-size: 0.8rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em;">AI Summary</dt><p style="margin-top: 0.25rem;">${summary}</p></div>` : ""}
 
       ${reasoning ? html`<div style="margin-top: 1rem;"><dt style="font-size: 0.8rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em;">Fit Reasoning</dt><div class="reasoning">${reasoning}</div></div>` : ""}

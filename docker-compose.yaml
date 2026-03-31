@@ -28,6 +28,7 @@ services:
       ADZUNA_APP_ID: ${ADZUNA_APP_ID}
       ADZUNA_APP_KEY: ${ADZUNA_APP_KEY}
       ADZUNA_COUNTRY: ${ADZUNA_COUNTRY:-us}
+      REMOTIVE_CATEGORIES: ${REMOTIVE_CATEGORIES:-devops}
       LOOKBACK_HOURS: ${LOOKBACK_HOURS:-14}
       PROFILE_PATH: /config/profile.yaml
     volumes:
