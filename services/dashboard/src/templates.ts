@@ -37,17 +37,17 @@ export function formatDate(dateStr: string): string {
 
 export function listingRow(l: Listing): string {
   const filtered = l.filter_reason ? ' class="filtered-row"' : "";
-  const filterBadge = l.filter_reason
-    ? `<span class="badge badge-filtered" title="${l.filter_reason}">filtered</span>`
-    : "";
   return html`<tr${raw(filtered)}>
-    <td><a href="/listings/${l.id}">${l.title}</a> ${raw(filterBadge)}</td>
+    <td><a href="/listings/${l.id}">${l.title}</a></td>
     <td>${l.company}</td>
     <td>${l.location}</td>
     <td><span class="score" style="color: ${scoreColor(l.fit_score)}">${scoreDisplay(l.fit_score)}</span></td>
     <td>${l.salary}</td>
     <td><span class="badge">${l.source}</span></td>
     <td>${formatDate(l.posted_at)}</td>
+    <td>${raw(l.filter_reason
+      ? `<span class="badge badge-filtered" title="${l.filter_reason}">filtered</span>`
+      : `<span class="badge badge-passed">passed</span>`)}</td>
   </tr>`.toString();
 }
 
@@ -82,7 +82,8 @@ export function layout(title: string, content: string): string {
 
           .score { font-weight: 600; font-size: 0.95rem; }
           .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; background: #1c1f26; }
-          .badge-filtered { background: #8b4513; color: #ffa500; margin-left: 0.5rem; cursor: help; }
+          .badge-filtered { background: #8b4513; color: #ffa500; cursor: help; }
+          .badge-passed { background: #1a3a1a; color: #2ecc71; }
           .filtered-row { opacity: 0.6; }
 
           .detail { background: #161b22; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
@@ -178,6 +179,7 @@ export function listingTable(listings: Listing[], page: number, totalPages: numb
           ${raw(sortHeader("Salary", "salary", sort))}
           ${raw(sortHeader("Source", "source", sort))}
           ${raw(sortHeader("Posted", "posted_at", sort))}
+          <th>Status</th>
         </tr>
       </thead>
       <tbody id="listing-tbody"
