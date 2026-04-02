@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { connect, AckPolicy, DeliverPolicy } from "nats";
-import { getDb, getListings, getListingById, getSources, getScoreDistribution, getDailyCounts, getTopCompanies, type ListingsQuery, type SortColumn, type SortOrder } from "./db.js";
+import { getDb, getListings, getListingById, getSources, getScoreDistribution, getDailyCounts, getTopCompanies, getSourceCounts, getFilterReasonCounts, getDailyCountsBySource, type ListingsQuery, type SortColumn, type SortOrder } from "./db.js";
 import { layout, listingTable, listingDetail, listingRow, chartsSection, type Listing, type SortState } from "./templates.js";
 
 const app = new Hono();
@@ -134,11 +134,14 @@ app.get("/", async (c) => {
   const sort = getSortState(query);
   const { listings, total } = await getListings(db, query);
   const totalPages = Math.ceil(total / 25);
-  const [sources, scores, daily, topCompanies] = await Promise.all([
+  const [sources, scores, daily, topCompanies, sourceCounts, filterReasons, dailyBySource] = await Promise.all([
     getSources(db),
     getScoreDistribution(db),
     getDailyCounts(db),
     getTopCompanies(db),
+    getSourceCounts(db),
+    getFilterReasonCounts(db),
+    getDailyCountsBySource(db),
   ]);
 
   const sourceOptions = sources
@@ -148,7 +151,7 @@ app.get("/", async (c) => {
   const content = `
     <h1><span class="live-badge"></span>Jobregator Dashboard</h1>
     <p style="color: #aaa; margin-bottom: 1rem;">${total} listings</p>
-    ${chartsSection(scores, daily, topCompanies)}
+    ${chartsSection(scores, daily, topCompanies, sourceCounts, filterReasons, dailyBySource)}
     <div class="filters">
       <label>Search
         <input type="text" name="search" value="${query.search ?? ""}"
