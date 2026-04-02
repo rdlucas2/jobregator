@@ -67,7 +67,7 @@ func (a *AdzunaSource) Fetch(ctx context.Context, query SearchQuery) ([]RawListi
 		"app_id":           {a.appID},
 		"app_key":          {a.appKey},
 		"results_per_page": {"50"},
-		"what":             {query.Term},
+		"what":             {query.Term + " remote"},
 		"sort_by":          {"date"},
 	}
 

@@ -1,0 +1,27 @@
+schedule: "0 */12 * * *"
+
+image:
+  repository: your-image
+  tag: latest
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    memory: "256Mi"
+    cpu: "500m"
+  requests:
+    memory: "128Mi"
+    cpu: "250m"
+
+restartPolicy: OnFailure
+
+env: []
+# - name: FOO
+#   value: "bar"
+
+envFrom: []
+# - secretRef:
+#     name: my-secret
+
+volumes: []
+volumeMounts: []

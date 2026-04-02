@@ -1,0 +1,51 @@
+replicaCount: 1
+
+image:
+  repository: nginx
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: "nginx"
+  hosts: []
+
+resources:
+  limits:
+    memory: "256Mi"
+    cpu: "500m"
+  requests:
+    memory: "128Mi"
+    cpu: "250m"
+
+env: []
+# - name: FOO
+#   value: "bar"
+
+envFrom: []
+# - secretRef:
+#     name: my-secret
+
+volumes: []
+volumeMounts: []
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+# Set to false for services without HTTP endpoints (worker, notifier)
+probesEnabled: true

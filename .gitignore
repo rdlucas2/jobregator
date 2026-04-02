@@ -1,6 +1,9 @@
 # Environment — never commit secrets
 .env
 
+# Personal profile (contains private job search details)
+config/profile.yaml
+
 # Test & coverage output
 coverage/
 *.out
@@ -17,3 +20,4 @@ Thumbs.db
 .vscode/
 *.swp
 node_modules/
+dist/

@@ -199,6 +199,13 @@ describe("listingDetail", () => {
     expect(result).toContain("Senior DevOps role");
   });
 
+  it("renders job description", () => {
+    const withDesc: Listing = { ...fakeListing, description: "We are looking for a DevOps engineer to manage our cloud infrastructure." };
+    const result = listingDetail(withDesc);
+    expect(result).toContain("Description");
+    expect(result).toContain("manage our cloud infrastructure");
+  });
+
   it("handles listing with no enrichment", () => {
     const bare: Listing = { ...fakeListing, enriched_json: null, fit_score: null };
     const result = listingDetail(bare);

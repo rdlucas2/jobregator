@@ -17,10 +17,15 @@ CREATE TABLE IF NOT EXISTS job_listings (
     raw_json JSONB,
     enriched_json JSONB,
     fit_score FLOAT,
+    filter_reason TEXT DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(source, external_id)
 );
+"""
+
+MIGRATION_ADD_FILTER_REASON = """
+ALTER TABLE job_listings ADD COLUMN IF NOT EXISTS filter_reason TEXT DEFAULT NULL;
 """
 
 
@@ -31,6 +36,7 @@ def get_connection(dsn: str):
 def ensure_schema(conn):
     with conn.cursor() as cur:
         cur.execute(SCHEMA_SQL)
+        cur.execute(MIGRATION_ADD_FILTER_REASON)
     conn.commit()
 
 
@@ -38,9 +44,11 @@ def insert_listing(conn, listing: dict) -> bool:
     """Insert a listing. Returns True if inserted, False if duplicate."""
     sql = """
         INSERT INTO job_listings (source, external_id, title, company, location,
-                                  description, url, salary, posted_at, raw_json)
+                                  description, url, salary, posted_at, raw_json,
+                                  filter_reason)
         VALUES (%(source)s, %(external_id)s, %(title)s, %(company)s, %(location)s,
-                %(description)s, %(url)s, %(salary)s, %(posted_at)s, %(raw_json)s)
+                %(description)s, %(url)s, %(salary)s, %(posted_at)s, %(raw_json)s,
+                %(filter_reason)s)
         ON CONFLICT (source, external_id) DO NOTHING
         RETURNING id
     """

@@ -3,10 +3,10 @@
 # Usage: make help
 # =============================================================================
 
-APP_NAME  ?= jobregator
+REGISTRY ?= ghcr.io/rdlucas2
 IMAGE_TAG ?= latest
-PORT      ?= 8080
-REGISTRY  ?= ghcr.io/rdlucas2
+
+SERVICES = scraper worker dashboard notifier mcp-server
 
 # Load .env if present (never commit .env — see .env.example)
 ifneq (,$(wildcard .env))
@@ -14,47 +14,48 @@ ifneq (,$(wildcard .env))
   export
 endif
 
-.PHONY: help build build-test test package run debug debug-test \
-        install-hooks gitleaks-scan \
-        sonar-start sonar-scan trivy-scan
+.PHONY: help build test up down logs \
+        build-% test-% \
+        install-hooks gitleaks-scan trivy-scan-%
 
-# Default target
 .DEFAULT_GOAL := help
 
 help: ## Show available targets
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
-	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_%-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	  | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}'
 
-# — Build ——————————————————————————————————————————————————————————————————————
+# — Docker Compose ————————————————————————————————————————————————————————————
 
-build: ## Build the artifact image
-	docker build -t $(APP_NAME):$(IMAGE_TAG) .
+up: ## Start all services via Docker Compose
+	docker compose up -d --build
 
-build-test: ## Build the test image (targets the test stage)
-	docker build -t $(APP_NAME)-test:$(IMAGE_TAG) . --target test
+down: ## Stop all services
+	docker compose down
 
-# — Test ———————————————————————————————————————————————————————————————————————
+logs: ## Tail logs for all services
+	docker compose logs -f
 
-test: build-test ## Run tests and write coverage reports to ./coverage/
-	@mkdir -p coverage
-	docker run --rm -v $(PWD)/coverage:/out $(APP_NAME)-test:$(IMAGE_TAG)
+# — Per-Service Build & Test ——————————————————————————————————————————————————
 
-# — Package ————————————————————————————————————————————————————————————————————
+build-%: ## Build a service artifact image (e.g. make build-scraper)
+	@if [ "$*" = "worker" ]; then \
+	  docker build --target artifact -t jobregator-$*:$(IMAGE_TAG) -f services/worker/Dockerfile . ; \
+	else \
+	  docker build --target artifact -t jobregator-$*:$(IMAGE_TAG) services/$* ; \
+	fi
 
-package: build ## Tag and push artifact image to registry (requires REGISTRY)
-	docker tag $(APP_NAME):$(IMAGE_TAG) $(REGISTRY)/$(APP_NAME):$(IMAGE_TAG)
-	docker push $(REGISTRY)/$(APP_NAME):$(IMAGE_TAG)
+test-%: ## Run tests for a service (e.g. make test-dashboard)
+	@if [ "$*" = "worker" ]; then \
+	  docker build --target test -t jobregator-$*-test:$(IMAGE_TAG) -f services/worker/Dockerfile . && \
+	  docker run --rm jobregator-$*-test:$(IMAGE_TAG) ; \
+	else \
+	  docker build --target test -t jobregator-$*-test:$(IMAGE_TAG) services/$* && \
+	  docker run --rm jobregator-$*-test:$(IMAGE_TAG) ; \
+	fi
 
-# — Run / Debug ————————————————————————————————————————————————————————————————
+build: $(addprefix build-,$(SERVICES)) ## Build all service images
 
-run: build ## Run the artifact container (loads .env)
-	docker run --rm --env-file .env -p $(PORT):$(PORT) $(APP_NAME):$(IMAGE_TAG)
-
-debug: build ## Open a shell in the artifact container
-	docker run -it --rm --env-file .env --entrypoint /bin/sh $(APP_NAME):$(IMAGE_TAG)
-
-debug-test: build-test ## Open a shell in the test container
-	docker run -it --rm --entrypoint /bin/sh $(APP_NAME)-test:$(IMAGE_TAG)
+test: $(addprefix test-,$(SERVICES)) ## Run tests for all services
 
 # — Git Hooks —————————————————————————————————————————————————————————————————
 
@@ -63,46 +64,19 @@ install-hooks: ## Install git hooks from .githooks/ (run once after cloning)
 	chmod +x .githooks/pre-commit
 	@echo "  Git hooks installed. pre-commit will scan for secrets via gitleaks."
 
-gitleaks-scan: ## Scan entire repo history for secrets with gitleaks (Docker)
+gitleaks-scan: ## Scan entire repo history for secrets with gitleaks
 	docker run --rm \
 	  -v "$(PWD):/repo" \
 	  -w /repo \
 	  ghcr.io/gitleaks/gitleaks:v8.21.2 \
 	  detect --no-banner -v
 
-# — Static Analysis & CVE Scanning —————————————————————————————————————————————
+# — CVE Scanning ——————————————————————————————————————————————————————————————
 
-sonar-start: ## Start local SonarQube at http://localhost:9000 (admin/admin)
-	docker run -d --name sonarqube -p 9000:9000 sonarqube
-	@echo ""
-	@echo "  SonarQube starting — monitor with: docker logs -f sonarqube"
-	@echo "  When ready: browse http://localhost:9000 and generate a token."
-	@echo "  Then set SONAR_TOKEN in .env and run: make sonar-scan"
-
-sonar-scan: ## Run SonarQube static analysis (requires SONAR_TOKEN in .env)
-	docker run -it --rm \
-	  -e SONAR_HOST_URL="http://host.docker.internal:9000" \
-	  -e SONAR_TOKEN="$(SONAR_TOKEN)" \
-	  -v "$(PWD):/usr/src" \
-	  sonarsource/sonar-scanner-cli
-
-trivy-scan: build ## Scan artifact image for CVEs with Trivy (table + JSON)
-	@mkdir -p .
+trivy-scan-%: build-% ## Scan a service image for CVEs (e.g. make trivy-scan-dashboard)
 	docker run --rm \
 	  -v /var/run/docker.sock:/var/run/docker.sock \
-	  -v "$(PWD):/output" \
 	  aquasec/trivy image \
 	    --format table \
-	    --output /output/trivy-report.txt \
 	    --scanners vuln \
-	    $(APP_NAME):$(IMAGE_TAG)
-	docker run --rm \
-	  -v /var/run/docker.sock:/var/run/docker.sock \
-	  -v "$(PWD):/output" \
-	  aquasec/trivy image \
-	    --format json \
-	    --output /output/trivy-report.json \
-	    --scanners vuln \
-	    $(APP_NAME):$(IMAGE_TAG)
-	@echo ""
-	@echo "  Trivy reports written to trivy-report.txt and trivy-report.json"
+	    jobregator-$*:$(IMAGE_TAG)

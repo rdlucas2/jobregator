@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: {{ .Release.Name }}
+        spec:
+          restartPolicy: {{ .Values.restartPolicy }}
+          containers:
+            - name: {{ .Release.Name }}
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              {{- if .Values.env }}
+              env:
+                {{- toYaml .Values.env | nindent 16 }}
+              {{- end }}
+              {{- if .Values.envFrom }}
+              envFrom:
+                {{- toYaml .Values.envFrom | nindent 16 }}
+              {{- end }}
+              {{- if .Values.volumeMounts }}
+              volumeMounts:
+                {{- toYaml .Values.volumeMounts | nindent 16 }}
+              {{- end }}
+          {{- if .Values.volumes }}
+          volumes:
+            {{- toYaml .Values.volumes | nindent 12 }}
+          {{- end }}

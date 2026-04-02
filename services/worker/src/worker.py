@@ -71,9 +71,11 @@ async def process_message(msg, db_conn, js, mcp_session):
         listing = json.loads(msg.data)
         source = listing["source"]
         external_id = listing["external_id"]
+        filter_reason = listing.get("filter_reason") or None
 
         # Insert raw listing (dedup at DB level)
         listing["raw_json"] = json.dumps(listing)
+        listing["filter_reason"] = filter_reason
         inserted = insert_listing(db_conn, listing)
 
         if not inserted:
@@ -81,9 +83,15 @@ async def process_message(msg, db_conn, js, mcp_session):
             await msg.ack()
             return
 
+        if filter_reason:
+            log.info("inserted filtered listing %s/%s: %s (reason: %s)",
+                     source, external_id, listing.get("title", ""), filter_reason)
+            await msg.ack()
+            return
+
         log.info("inserted listing %s/%s: %s", source, external_id, listing.get("title", ""))
 
-        # Enrich via MCP if enabled
+        # Enrich via MCP if enabled (skip for filtered listings)
         if ENABLE_ENRICHMENT and mcp_session is not None:
             enrichment = await enrich_listing(mcp_session, listing)
             if enrichment:

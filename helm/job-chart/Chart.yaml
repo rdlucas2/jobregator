@@ -1,0 +1,6 @@
+apiVersion: v2
+name: job-chart
+description: Generic CronJob chart for jobregator
+type: application
+version: 0.1.0
+appVersion: "latest"

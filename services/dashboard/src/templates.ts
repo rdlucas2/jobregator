@@ -1,5 +1,5 @@
 import { html, raw } from "hono/html";
-import type { ScoreBucket, DailyCount, TopCompany } from "./db.js";
+import type { ScoreBucket, DailyCount, TopCompany, SourceCount, FilterReasonCount, DailySourceCount } from "./db.js";
 
 export interface Listing {
   id: number;
@@ -14,6 +14,7 @@ export interface Listing {
   fit_score: number | null;
   enriched_json: Record<string, unknown> | null;
   description?: string;
+  filter_reason?: string | null;
 }
 
 export function scoreColor(score: number | null): string {
@@ -35,7 +36,8 @@ export function formatDate(dateStr: string): string {
 }
 
 export function listingRow(l: Listing): string {
-  return html`<tr>
+  const filtered = l.filter_reason ? ' class="filtered-row"' : "";
+  return html`<tr${raw(filtered)}>
     <td><a href="/listings/${l.id}">${l.title}</a></td>
     <td>${l.company}</td>
     <td>${l.location}</td>
@@ -43,6 +45,9 @@ export function listingRow(l: Listing): string {
     <td>${l.salary}</td>
     <td><span class="badge">${l.source}</span></td>
     <td>${formatDate(l.posted_at)}</td>
+    <td>${raw(l.filter_reason
+      ? `<span class="badge badge-filtered" title="${l.filter_reason}">filtered</span>`
+      : `<span class="badge badge-passed">passed</span>`)}</td>
   </tr>`.toString();
 }
 
@@ -77,6 +82,9 @@ export function layout(title: string, content: string): string {
 
           .score { font-weight: 600; font-size: 0.95rem; }
           .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; background: #1c1f26; }
+          .badge-filtered { background: #8b4513; color: #ffa500; cursor: help; }
+          .badge-passed { background: #1a3a1a; color: #2ecc71; }
+          .filtered-row { opacity: 0.6; }
 
           .detail { background: #161b22; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
           .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
@@ -101,6 +109,7 @@ export function layout(title: string, content: string): string {
           .bar-track { flex: 1; height: 20px; background: #1c1f26; border-radius: 3px; overflow: hidden; }
           .bar-fill { height: 100%; border-radius: 3px; min-width: 2px; transition: width 0.3s; }
           .bar-value { width: 35px; font-size: 0.8rem; color: #e1e1e6; }
+          .stacked-track { display: flex; }
 
           th.sortable { cursor: pointer; user-select: none; }
           th.sortable:hover { color: #58a6ff; }
@@ -171,6 +180,7 @@ export function listingTable(listings: Listing[], page: number, totalPages: numb
           ${raw(sortHeader("Salary", "salary", sort))}
           ${raw(sortHeader("Source", "source", sort))}
           ${raw(sortHeader("Posted", "posted_at", sort))}
+          <th>Status</th>
         </tr>
       </thead>
       <tbody id="listing-tbody"
@@ -192,7 +202,24 @@ const scoreColors: Record<string, string> = {
   "Unscored": "#555",
 };
 
-export function chartsSection(scores: ScoreBucket[], daily: DailyCount[], topCompanies: TopCompany[]): string {
+const sourceColors: Record<string, string> = {
+  adzuna: "#3498db",
+  remotive: "#e67e22",
+  jobicy: "#9b59b6",
+};
+
+function pickSourceColor(source: string): string {
+  return sourceColors[source.toLowerCase()] ?? "#58a6ff";
+}
+
+export function chartsSection(
+  scores: ScoreBucket[],
+  daily: DailyCount[],
+  topCompanies: TopCompany[],
+  sourceCounts: SourceCount[],
+  filterReasons: FilterReasonCount[],
+  dailyBySource: DailySourceCount[],
+): string {
   const maxScore = Math.max(...scores.map((s) => Number(s.count)), 1);
   const scoreChart = scores
     .map((s) => {
@@ -219,9 +246,83 @@ export function chartsSection(scores: ScoreBucket[], daily: DailyCount[], topCom
     })
     .join("");
 
+  // Listings by Source chart
+  const maxSourceTotal = Math.max(...sourceCounts.map((s) => Number(s.total)), 1);
+  const sourceChart = sourceCounts
+    .map((s) => {
+      const pct = (Number(s.total) / maxSourceTotal) * 100;
+      const color = pickSourceColor(s.source);
+      return `<div class="bar-row"><span class="bar-label">${s.source}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div><span class="bar-value">${s.total}</span></div>`;
+    })
+    .join("");
+
+  // Pass Rate by Source chart (stacked bars)
+  const passRateChart = sourceCounts
+    .map((s) => {
+      const total = Number(s.total) || 1;
+      const passedPct = (Number(s.passed) / total) * 100;
+      const filteredPct = (Number(s.filtered) / total) * 100;
+      const color = pickSourceColor(s.source);
+      return `<div class="bar-row"><span class="bar-label">${s.source}</span><div class="bar-track stacked-track"><div class="bar-fill" style="width:${passedPct}%;background:#2ecc71" title="${s.passed} passed"></div><div class="bar-fill" style="width:${filteredPct}%;background:#e74c3c" title="${s.filtered} filtered"></div></div><span class="bar-value">${Math.round(passedPct)}%</span></div>`;
+    })
+    .join("");
+
+  // Filter Reason Breakdown chart
+  const maxReason = Math.max(...filterReasons.map((r) => Number(r.count)), 1);
+  const reasonChart = filterReasons.length > 0
+    ? filterReasons
+        .map((r) => {
+          const pct = (Number(r.count) / maxReason) * 100;
+          const label = r.reason.length > 25 ? r.reason.slice(0, 24) + "…" : r.reason;
+          return `<div class="bar-row"><span class="bar-label" style="width:180px" title="${r.reason}">${label}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:#e74c3c"></div></div><span class="bar-value">${r.count}</span></div>`;
+        })
+        .join("")
+    : `<p style="color:#666;font-size:0.85rem;">No filtered listings</p>`;
+
+  // Daily Counts by Source chart (stacked)
+  const dates = [...new Set(dailyBySource.map((d) => d.date))];
+  const sources = [...new Set(dailyBySource.map((d) => d.source))];
+  const dailySourceMap = new Map<string, Map<string, number>>();
+  for (const d of dailyBySource) {
+    if (!dailySourceMap.has(d.date)) dailySourceMap.set(d.date, new Map());
+    dailySourceMap.get(d.date)!.set(d.source, Number(d.count));
+  }
+  const maxDailySource = Math.max(
+    ...dates.map((date) => {
+      const m = dailySourceMap.get(date)!;
+      let sum = 0;
+      for (const c of m.values()) sum += c;
+      return sum;
+    }),
+    1,
+  );
+  const dailySourceChart = dates
+    .map((date) => {
+      const m = dailySourceMap.get(date)!;
+      const label = new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      const bars = sources
+        .map((s) => {
+          const count = m.get(s) ?? 0;
+          const pct = (count / maxDailySource) * 100;
+          return count > 0 ? `<div class="bar-fill" style="width:${pct}%;background:${pickSourceColor(s)}" title="${s}: ${count}"></div>` : "";
+        })
+        .join("");
+      const total = [...m.values()].reduce((a, b) => a + b, 0);
+      return `<div class="bar-row"><span class="bar-label">${label}</span><div class="bar-track stacked-track">${bars}</div><span class="bar-value">${total}</span></div>`;
+    })
+    .join("");
+
+  const legendHtml = sources
+    .map((s) => `<span style="display:inline-flex;align-items:center;gap:0.3rem;margin-right:0.75rem;font-size:0.75rem;color:#aaa;"><span style="width:10px;height:10px;border-radius:2px;background:${pickSourceColor(s)};display:inline-block;"></span>${s}</span>`)
+    .join("");
+
   return `<div class="charts">
     <div class="chart-card"><h3>Score Distribution</h3><div class="bar-chart">${scoreChart}</div></div>
+    <div class="chart-card"><h3>Listings by Source</h3><div class="bar-chart">${sourceChart}</div></div>
+    <div class="chart-card"><h3>Pass Rate by Source</h3><div class="bar-chart">${passRateChart}</div><div style="margin-top:0.5rem;font-size:0.7rem;color:#666;">Green = passed, Red = filtered</div></div>
+    <div class="chart-card"><h3>Filter Reasons</h3><div class="bar-chart">${reasonChart}</div></div>
     <div class="chart-card"><h3>Listings Per Day</h3><div class="bar-chart">${dailyChart}</div></div>
+    <div class="chart-card"><h3>Daily Volume by Source</h3><div style="margin-bottom:0.5rem;">${legendHtml}</div><div class="bar-chart">${dailySourceChart}</div></div>
     <div class="chart-card"><h3>Top Companies</h3><div class="bar-chart">${companyChart}</div></div>
   </div>`;
 }
@@ -291,6 +392,8 @@ export function listingDetail(listing: Listing): string {
             </div>`
           : ""
       }
+
+      ${listing.description ? html`<div style="margin-top: 1rem;"><dt style="font-size: 0.8rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em;">Description</dt><div style="margin-top: 0.25rem; white-space: pre-wrap; color: #ccc; font-size: 0.9rem; line-height: 1.7;">${listing.description}</div></div>` : ""}
 
       ${summary ? html`<div style="margin-top: 1rem;"><dt style="font-size: 0.8rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em;">AI Summary</dt><p style="margin-top: 0.25rem;">${summary}</p></div>` : ""}
 

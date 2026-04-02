@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dashboard
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.spec.source.repoURL }}
+    path: helm/web-chart
+    targetRevision: {{ .Values.spec.source.targetRevision }}
+    helm:
+      valueFiles:
+        - ../../helm/envs/common/dashboard-values.yaml
+        - ../../helm/envs/local/dashboard-values.yaml
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

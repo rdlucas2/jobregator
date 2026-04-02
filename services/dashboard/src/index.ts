@@ -2,7 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { connect, AckPolicy, DeliverPolicy } from "nats";
-import { getDb, getListings, getListingById, getSources, getScoreDistribution, getDailyCounts, getTopCompanies, type ListingsQuery, type SortColumn, type SortOrder } from "./db.js";
+import { getDb, getListings, getListingById, getSources, getScoreDistribution, getDailyCounts, getTopCompanies, getSourceCounts, getFilterReasonCounts, getDailyCountsBySource, type ListingsQuery, type SortColumn, type SortOrder } from "./db.js";
 import { layout, listingTable, listingDetail, listingRow, chartsSection, type Listing, type SortState } from "./templates.js";
 
 const app = new Hono();
@@ -88,11 +88,13 @@ function parseQuery(c: { req: { query: (key: string) => string | undefined } }):
   const maxSalary = c.req.query("max_salary") ? Number(c.req.query("max_salary")) : undefined;
   const search = c.req.query("search") || undefined;
   const source = c.req.query("source") || undefined;
+  const statusRaw = c.req.query("status") as "all" | "passed" | "filtered" | undefined;
+  const status = statusRaw && ["all", "passed", "filtered"].includes(statusRaw) ? statusRaw : "passed";
   const sortByRaw = c.req.query("sort_by") as SortColumn | undefined;
   const sortBy = sortByRaw && validSortColumns.has(sortByRaw) ? sortByRaw : undefined;
   const sortOrderRaw = c.req.query("sort_order") as SortOrder | undefined;
   const sortOrder = sortOrderRaw && validSortOrders.has(sortOrderRaw) ? sortOrderRaw : undefined;
-  return { page, minScore, maxScore, minSalary, maxSalary, search, source, sortBy, sortOrder };
+  return { page, minScore, maxScore, minSalary, maxSalary, search, source, status, sortBy, sortOrder };
 }
 
 function getSortState(query: ListingsQuery): SortState {
@@ -132,11 +134,14 @@ app.get("/", async (c) => {
   const sort = getSortState(query);
   const { listings, total } = await getListings(db, query);
   const totalPages = Math.ceil(total / 25);
-  const [sources, scores, daily, topCompanies] = await Promise.all([
+  const [sources, scores, daily, topCompanies, sourceCounts, filterReasons, dailyBySource] = await Promise.all([
     getSources(db),
     getScoreDistribution(db),
     getDailyCounts(db),
     getTopCompanies(db),
+    getSourceCounts(db),
+    getFilterReasonCounts(db),
+    getDailyCountsBySource(db),
   ]);
 
   const sourceOptions = sources
@@ -146,7 +151,7 @@ app.get("/", async (c) => {
   const content = `
     <h1><span class="live-badge"></span>Jobregator Dashboard</h1>
     <p style="color: #aaa; margin-bottom: 1rem;">${total} listings</p>
-    ${chartsSection(scores, daily, topCompanies)}
+    ${chartsSection(scores, daily, topCompanies, sourceCounts, filterReasons, dailyBySource)}
     <div class="filters">
       <label>Search
         <input type="text" name="search" value="${query.search ?? ""}"
@@ -177,6 +182,15 @@ app.get("/", async (c) => {
                 hx-trigger="change" hx-include=".filters">
           <option value="">All</option>
           ${sourceOptions}
+        </select>
+      </label>
+      <label>Status
+        <select name="status"
+                hx-get="/listings" hx-target="#listing-results" hx-swap="innerHTML"
+                hx-trigger="change" hx-include=".filters">
+          <option value="passed"${query.status === "passed" || !query.status ? " selected" : ""}>Passed</option>
+          <option value="all"${query.status === "all" ? " selected" : ""}>All</option>
+          <option value="filtered"${query.status === "filtered" ? " selected" : ""}>Filtered</option>
         </select>
       </label>
       <input type="hidden" name="sort_by" value="${sort.sortBy}" />

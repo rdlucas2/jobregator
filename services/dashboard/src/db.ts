@@ -22,6 +22,7 @@ export interface ListingsQuery {
   maxSalary?: number;
   search?: string;
   source?: string;
+  status?: "all" | "passed" | "filtered";
   sortBy?: SortColumn;
   sortOrder?: SortOrder;
 }
@@ -54,6 +55,11 @@ export async function getListings(
   if (query.source) {
     conditions.push(`source = $${paramIdx++}`);
     params.push(query.source);
+  }
+  if (query.status === "passed") {
+    conditions.push(`filter_reason IS NULL`);
+  } else if (query.status === "filtered") {
+    conditions.push(`filter_reason IS NOT NULL`);
   }
   if (query.minSalary !== undefined) {
     conditions.push(`CAST(NULLIF(REGEXP_REPLACE(SPLIT_PART(salary, '-', 1), '[^0-9]', '', 'g'), '') AS INTEGER) >= $${paramIdx++}`);
@@ -88,7 +94,7 @@ export async function getListings(
 
   const listings = await db.unsafe(
     `SELECT id, source, external_id, title, company, location, url, salary,
-            posted_at, fit_score, enriched_json
+            posted_at, fit_score, enriched_json, filter_reason
      FROM job_listings ${where}
      ${orderBy}
      LIMIT $${paramIdx++} OFFSET $${paramIdx}`,
@@ -160,6 +166,67 @@ export async function getTopCompanies(
     LIMIT ${limit}
   `;
   return result as unknown as TopCompany[];
+}
+
+export interface SourceCount {
+  source: string;
+  total: number;
+  passed: number;
+  filtered: number;
+}
+
+export async function getSourceCounts(
+  db: ReturnType<typeof postgres>,
+): Promise<SourceCount[]> {
+  const result = await db`
+    SELECT source,
+           COUNT(*) as total,
+           COUNT(*) FILTER (WHERE filter_reason IS NULL) as passed,
+           COUNT(*) FILTER (WHERE filter_reason IS NOT NULL) as filtered
+    FROM job_listings
+    GROUP BY source
+    ORDER BY total DESC
+  `;
+  return result as unknown as SourceCount[];
+}
+
+export interface FilterReasonCount {
+  reason: string;
+  count: number;
+}
+
+export async function getFilterReasonCounts(
+  db: ReturnType<typeof postgres>,
+): Promise<FilterReasonCount[]> {
+  const result = await db`
+    SELECT filter_reason as reason, COUNT(*) as count
+    FROM job_listings
+    WHERE filter_reason IS NOT NULL
+    GROUP BY filter_reason
+    ORDER BY count DESC
+    LIMIT 10
+  `;
+  return result as unknown as FilterReasonCount[];
+}
+
+export interface DailySourceCount {
+  date: string;
+  source: string;
+  count: number;
+}
+
+export async function getDailyCountsBySource(
+  db: ReturnType<typeof postgres>,
+  days: number = 14,
+): Promise<DailySourceCount[]> {
+  const result = await db`
+    SELECT DATE(posted_at) as date, source, COUNT(*) as count
+    FROM job_listings
+    WHERE posted_at >= NOW() - ${days + ' days'}::interval
+    GROUP BY DATE(posted_at), source
+    ORDER BY date, source
+  `;
+  return result as unknown as DailySourceCount[];
 }
 
 export async function getSources(
