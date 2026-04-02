@@ -1,0 +1,47 @@
+## Copy this file to profile.yaml and customize it for your job search.
+## profile.yaml is gitignored and will not be committed.
+
+search_terms:
+  - "DevOps Engineer"
+  - "Platform Engineer"
+  - "Site Reliability Engineer"
+  - "Cloud Engineer"
+  - "Software Engineer"
+
+hard_filters:
+  # Only show remote positions
+  remote: true
+
+  # Only show positions in these countries
+  countries: ["US", "USA", "United States"]
+
+  # Minimum base salary (set to 0 to disable)
+  min_salary: 100000
+
+  # Filter out listings with these words in the title
+  exclude_titles:
+    - "Junior"
+    - "Intern"
+
+profile: |
+  Describe yourself here. This text is sent to the MCP enrichment
+  server to score how well each listing fits your background.
+  The more specific you are, the better the scoring.
+
+  Include:
+  - Years of experience and seniority level
+  - Target compensation range
+  - Employment type preference (W2, contract, etc.)
+  - Core technical skills and tools you use daily
+  - Languages you're strongest in (and any you want to avoid)
+  - Cloud platforms and certifications
+  - What kind of work you enjoy vs. want to avoid
+  - Whether you're open to management roles
+
+  Example:
+  Senior DevOps Engineer with 10+ years of experience.
+  Target: $150k+ base salary, full-time W2 only.
+  Core skills: CI/CD (GitHub Actions, Jenkins), Terraform, Kubernetes.
+  Cloud: AWS (certified), open to Azure.
+  Languages: Python, Go, Bash. Avoid Java and PHP.
+  Prefer platform/DevOps work over pure infrastructure.

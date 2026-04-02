@@ -1,6 +1,9 @@
 # Environment — never commit secrets
 .env
 
+# Personal profile (contains private job search details)
+config/profile.yaml
+
 # Test & coverage output
 coverage/
 *.out
