@@ -114,22 +114,46 @@ pure refactoring, which is what makes it a safe place to land the structure.
 
 ### Acceptance criteria
 
-- [ ] `TypedDecisionProvider` and `TextEnrichmentProvider` Protocols defined in `src/providers/base.py`
-- [ ] `Decisions` and `TextEnrichment` are frozen dataclasses with explicit field types
-- [ ] `ClaudeTypedDecisions` returns all typed fields from a single Claude call
-- [ ] `ClaudeTextEnrichment` returns `skills`, `tech_stack`, `remote_flags`, `summary`
-- [ ] `build_typed_provider()` reads `ENRICHMENT_TYPED_PROVIDER`, accepts `claude`, and raises a clear error on an unknown value
-- [ ] The remote-work cap is applied in Python, not in any prompt, and the "cap at 0.3 max" instruction is deleted from the prompt text
-- [ ] `reasoning` is synthesized in code from decision fields and cites the values that drove the cap
-- [ ] A malformed model response raises a typed error instead of returning `fit_score` 0.0
-- [ ] `analyze_job_listing` handles an exception raised by `llm.complete` without a `NameError`
-- [ ] `enriched_json` includes `provider` and `model` for every enrichment
-- [ ] MCP tool signatures for `analyze_job` and `score_job_fit` are byte-identical to before
-- [ ] Tests: provider protocol conformance via a fake, the cap applied at the boundary and just inside it, reasoning synthesis, malformed-response handling, and the existing `tests/test_tools.py` behavior preserved
+- [x] `TypedDecisionProvider` and `TextEnrichmentProvider` Protocols defined in `src/providers/base.py`
+- [x] `Decisions` and `TextEnrichment` are frozen dataclasses with explicit field types
+- [x] `ClaudeTypedDecisions` returns all typed fields from a single Claude call
+- [x] `ClaudeTextEnrichment` returns `skills`, `tech_stack`, `remote_flags`, `summary`
+- [x] `build_typed_provider()` accepts `claude` and raises a clear error on an unknown value
+      — *deviation: `server.py` reads the env var and passes the name in, rather than
+      the factory reading the environment itself. Keeps the factory testable.*
+- [x] The remote-work cap is applied in Python, not in any prompt, and the "cap at 0.3 max" instruction is deleted from the prompt text
+- [x] `reasoning` is synthesized in code from decision fields and cites the values that drove the cap
+- [x] A malformed model response raises a typed error instead of returning `fit_score` 0.0
+- [x] `analyze_job_listing` handles an exception raised by `llm.complete` without a `NameError`
+- [x] `enriched_json` includes `provider` and `model` for every enrichment
+- [x] MCP tool signatures for `analyze_job` and `score_job_fit` are byte-identical to before
+- [x] Tests: provider protocol conformance via a fake, the cap applied at the boundary and just inside it, reasoning synthesis, malformed-response handling, and the existing `tests/test_tools.py` behavior preserved
 - [ ] `make test-mcp-server` passes; `make up` enriches listings end-to-end as before
+      — **NOT VERIFIED.** Docker is unreachable from this WSL distro (Docker Desktop
+      WSL integration disabled), so the image test stage never ran. 27 tests pass in a
+      venv built from the same requirements files, on Python 3.12 vs the image's 3.13.
+      **Blocked regardless** by the pre-existing `mcp>=1.9.0` pin: mcp 2.x renamed
+      `FastMCP` to `MCPServer`, so `src/server.py` fails to import on a fresh build.
+      Needs `mcp>=1.9.0,<2` (or a 2.x migration) before `make up` can run at all.
 
 ---
 
+
+### Emerged during implementation
+
+- **Typed decisions no longer see the `location` field.** `analyze_job` passes
+  `location` and `score_job_fit` does not, so keying the decision cache on it
+  meant the two tools never shared an entry and the memoization silently did
+  nothing — restoring the third call it exists to remove. Dropping `location`
+  from the typed prompt is also the better judgment: the original prompt itself
+  warned that listings are routinely tagged remote in `location` and then
+  require office days, and the scraper already hard-filters on it. Remote-ness
+  is now judged from the description alone. Pinned by
+  `test_the_two_mcp_tool_shapes_share_one_cache_entry`.
+- **`CachingTypedDecisions` was not in the original design.** It exists because
+  the MCP surface exposes two tools that both need one provider round trip.
+  Bounded LRU, keyed on the listing fields the provider actually sees plus the
+  profile.
 ## Phase 2: Jev implementation behind the same interface
 
 **Requires `TYPESAFE_API_KEY`.** Blocked until the key exists; everything else
