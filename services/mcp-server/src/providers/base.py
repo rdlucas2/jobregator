@@ -35,6 +35,10 @@ class Decisions:
     requires_relocation: float
     is_contract_or_freelance: float
     confidence: dict[str, float] = field(default_factory=dict)
+    # Full distribution per question, when the provider reports one. Kept for
+    # threshold tuning: the winning label alone cannot tell you how close the
+    # call was.
+    probabilities: dict[str, dict] = field(default_factory=dict)
     provider: str = ""
     model: str = ""
 

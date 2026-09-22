@@ -1,3 +1,5 @@
 mcp>=1.9.0,<2
 anthropic>=0.52.0
 pyyaml>=6.0
+# Pre-1.0: upper bound deliberate, minor releases may break the API.
+typesafe-sdk>=0.7.1,<1

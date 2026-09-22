@@ -38,3 +38,39 @@ def test_provider_name_is_case_and_whitespace_insensitive():
 
 def test_builds_the_claude_text_provider():
     assert isinstance(build_text_provider(llm=FakeLLM()), ClaudeTextEnrichment)
+
+
+class StubTypeSafeClient:
+    async def system_one(self, *a, **kw):
+        raise AssertionError("not called during construction")
+
+
+def test_builds_the_jev_typed_provider_by_name():
+    from src.providers.jev import JevTypedDecisions
+
+    provider = build_typed_provider("jev", typesafe_client=StubTypeSafeClient())
+
+    assert isinstance(provider, JevTypedDecisions)
+
+
+def test_jev_provider_is_pinned_to_the_configured_model():
+    provider = build_typed_provider(
+        "jev", typesafe_client=StubTypeSafeClient(), jev_model="jev-1.13.0"
+    )
+
+    assert provider._model == "jev-1.13.0"
+
+
+def test_asking_for_jev_without_a_client_fails_loudly():
+    with pytest.raises(ValueError, match="typesafe_client"):
+        build_typed_provider("jev")
+
+
+def test_asking_for_claude_without_an_llm_fails_loudly():
+    with pytest.raises(ValueError, match="llm"):
+        build_typed_provider("claude")
+
+
+def test_unknown_provider_error_lists_both_options():
+    with pytest.raises(ValueError, match="claude, jev"):
+        build_typed_provider("gpt", llm=FakeLLM())

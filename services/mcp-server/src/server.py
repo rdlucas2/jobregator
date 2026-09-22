@@ -15,9 +15,13 @@ log = logging.getLogger(__name__)
 PROFILE_PATH = os.environ.get("PROFILE_PATH", "/config/profile.yaml")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
-# Phase 1 ships only the Claude implementation; Phase 2 adds "jev" and makes it
-# the default. See plans/jev-typed-decisions.md.
-TYPED_PROVIDER = os.environ.get("ENRICHMENT_TYPED_PROVIDER", "claude")
+# Which model answers the bounded questions. Set to "claude" to revert; that
+# path needs no TypeSafe credential. See plans/jev-typed-decisions.md.
+TYPED_PROVIDER = os.environ.get("ENRICHMENT_TYPED_PROVIDER", "jev")
+TYPESAFE_API_KEY = os.environ.get("TYPESAFE_API_KEY", "")
+# Pinned rather than "jev-latest": routing branches on probability thresholds,
+# and an alias that moves underneath us changes behavior silently.
+JEV_MODEL = os.environ.get("JEV_MODEL", "jev-1.13.0")
 
 mcp = FastMCP("jobregator-enrichment")
 
@@ -33,6 +37,7 @@ _profile_text = ""
 _llm = None
 _typed_provider = None
 _text_provider = None
+_typesafe_client = None
 
 
 def _get_llm():
@@ -44,6 +49,20 @@ def _get_llm():
     return _llm
 
 
+def _get_typesafe_client():
+    global _typesafe_client
+    if _typesafe_client is None:
+        if not TYPESAFE_API_KEY:
+            raise RuntimeError(
+                "TYPESAFE_API_KEY must be set when ENRICHMENT_TYPED_PROVIDER=jev "
+                "(set ENRICHMENT_TYPED_PROVIDER=claude to fall back to Claude)"
+            )
+        from typesafe_sdk import AsyncTypeSafeClient
+
+        _typesafe_client = AsyncTypeSafeClient(api_key=TYPESAFE_API_KEY)
+    return _typesafe_client
+
+
 def _get_typed_provider():
     """The typed-decision provider, memoized across the two MCP tools.
 
@@ -52,8 +71,19 @@ def _get_typed_provider():
     """
     global _typed_provider
     if _typed_provider is None:
-        _typed_provider = build_typed_provider(TYPED_PROVIDER, _get_llm(), cached=True)
-        log.info("typed decision provider: %s", TYPED_PROVIDER)
+        wants_jev = (TYPED_PROVIDER or "").strip().lower() == "jev"
+        _typed_provider = build_typed_provider(
+            TYPED_PROVIDER,
+            llm=None if wants_jev else _get_llm(),
+            typesafe_client=_get_typesafe_client() if wants_jev else None,
+            jev_model=JEV_MODEL,
+            cached=True,
+        )
+        log.info(
+            "typed decision provider: %s%s",
+            TYPED_PROVIDER,
+            f" ({JEV_MODEL})" if wants_jev else "",
+        )
     return _typed_provider
 
 

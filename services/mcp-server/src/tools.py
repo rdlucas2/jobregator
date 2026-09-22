@@ -52,6 +52,7 @@ async def score_fit(listing: dict, profile: str, typed_provider) -> dict:
         "provider": decisions.provider,
         "model": decisions.model,
         "confidence": decisions.confidence,
+        "probabilities": decisions.probabilities,
     }
 
 

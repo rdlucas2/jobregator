@@ -32,10 +32,20 @@ env:
         key: ANTHROPIC_API_KEY
   - name: CLAUDE_MODEL
     value: "claude-sonnet-4-20250514"
-  # Which model answers the bounded questions. "jev" arrives in Phase 2 of
-  # plans/jev-typed-decisions.md and additionally needs TYPESAFE_API_KEY.
+  # Which model answers the bounded questions. Set "claude" to revert; that
+  # path needs no TypeSafe credential.
   - name: ENRICHMENT_TYPED_PROVIDER
-    value: "claude"
+    value: "jev"
+  - name: TYPESAFE_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: jobregator-secrets
+        key: TYPESAFE_API_KEY
+        # Optional so selecting the claude provider does not wedge the pod in
+        # CreateContainerConfigError; the app fails fast with a clearer message.
+        optional: true
+  - name: JEV_MODEL
+    value: "jev-1.13.0"
 
 volumes:
   - name: config

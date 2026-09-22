@@ -61,3 +61,33 @@ async def test_enriching_one_listing_costs_two_claude_calls():
     assert len(llm.prompts) == 2, f"expected 2 Claude calls, got {len(llm.prompts)}"
     assert analysis["experience_level"] == "senior"
     assert scoring["score"] == 0.82
+
+
+@pytest.mark.asyncio
+async def test_jev_path_also_costs_one_typed_call_across_both_tools():
+    from tests.test_jev_provider import StubClient, build_response
+    from src.providers.factory import build_typed_provider
+
+    client = StubClient(build_response())
+    typed = build_typed_provider("jev", typesafe_client=client, cached=True)
+    text = build_text_provider(CountingLLM())
+
+    await analyze_job_listing(
+        {"title": "Senior DevOps Engineer", "company": "Acme",
+         "location": "Remote, USA", "description": "Fully remote."},
+        profile="Senior DevOps Engineer.",
+        typed_provider=typed,
+        text_provider=text,
+    )
+    scoring = await score_fit(
+        {"title": "Senior DevOps Engineer", "company": "Acme",
+         "description": "Fully remote."},
+        "Senior DevOps Engineer.",
+        typed,
+    )
+
+    assert client.calls == 1
+    assert scoring["score"] == pytest.approx(0.8)
+    # Calibration data must survive into what the worker stores.
+    assert scoring["confidence"]["fit"] == pytest.approx(0.81)
+    assert scoring["probabilities"]["fit"][3] == pytest.approx(0.60)
