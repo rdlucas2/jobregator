@@ -146,3 +146,38 @@ async def test_text_enrichment_unparseable_response_raises():
 
     with pytest.raises(EnrichmentError):
         await provider.enrich(LISTING)
+
+
+@pytest.mark.asyncio
+async def test_accepts_json_wrapped_in_a_markdown_fence():
+    """Both prompts say "no markdown" and models still fence the output.
+
+    Sonnet 5 wraps text-enrichment JSON in ```json fences where Opus 5 does
+    not, so the instruction is a request, never a guarantee.
+    """
+    from src.providers.claude import ClaudeTextEnrichment
+
+    fenced = "```json\n" + TEXT_RESPONSE + "\n```"
+    provider = ClaudeTextEnrichment(FakeLLM(fenced))
+
+    enrichment = await provider.enrich(LISTING)
+
+    assert enrichment.tech_stack == ["AWS", "Docker", "GitHub Actions"]
+
+
+@pytest.mark.asyncio
+async def test_accepts_a_bare_fence_without_a_language_tag():
+    fenced = "```\n" + TYPED_RESPONSE + "\n```"
+    provider = ClaudeTypedDecisions(FakeLLM(fenced))
+
+    decisions = await provider.decide(LISTING, profile="Senior DevOps Engineer.")
+
+    assert decisions.fit_score == 0.82
+
+
+@pytest.mark.asyncio
+async def test_still_raises_on_genuinely_unparseable_output():
+    provider = ClaudeTypedDecisions(FakeLLM("I can't help with that request."))
+
+    with pytest.raises(EnrichmentError):
+        await provider.decide(LISTING, profile="Senior DevOps Engineer.")

@@ -1,8 +1,9 @@
 import anthropic
 
-# Claude Opus 5. The previous pin, claude-sonnet-4-20250514, was retired and
-# every enrichment request returned 404.
-DEFAULT_MODEL = "claude-opus-5"
+# Claude Sonnet 5. Enrichment is bounded classification over a high volume of
+# listings, which does not need Opus-tier reasoning. The earlier pin,
+# claude-sonnet-4-20250514, was retired and returned 404 on every request.
+DEFAULT_MODEL = "claude-sonnet-5"
 
 # A ceiling, not a spend — only generated tokens are billed. Low enough to stay
 # inside the SDK's non-streaming HTTP timeout.

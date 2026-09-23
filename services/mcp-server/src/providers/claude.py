@@ -39,6 +39,26 @@ Return a JSON object with exactly these fields:
 Return ONLY valid JSON, no markdown or explanation."""
 
 
+def _strip_code_fence(text: str) -> str:
+    """Unwrap a markdown code fence if the model added one.
+
+    Both prompts ask for bare JSON and models still fence it — Sonnet 5 does on
+    text enrichment where Opus 5 does not. The instruction is a request, not a
+    guarantee, so the parser tolerates it. (Structured outputs would remove the
+    guesswork entirely; that is a larger change than this fix.)
+    """
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+
+    # Drop the opening fence line, which may carry a language tag.
+    _, _, body = stripped.partition("\n")
+    body = body.rstrip()
+    if body.endswith("```"):
+        body = body[: -len("```")]
+    return body.strip()
+
+
 async def _complete_json(llm, prompt: str) -> dict:
     """Call Claude and parse its reply as JSON, or raise EnrichmentError.
 
@@ -51,8 +71,8 @@ async def _complete_json(llm, prompt: str) -> dict:
         raise EnrichmentError(f"claude request failed: {exc}") from exc
 
     try:
-        return json.loads(response)
-    except (json.JSONDecodeError, TypeError) as exc:
+        return json.loads(_strip_code_fence(response))
+    except (json.JSONDecodeError, TypeError, AttributeError) as exc:
         raise EnrichmentError(f"claude returned unparseable JSON: {exc}") from exc
 
 
