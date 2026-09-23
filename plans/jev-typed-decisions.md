@@ -128,13 +128,10 @@ pure refactoring, which is what makes it a safe place to land the structure.
 - [x] `enriched_json` includes `provider` and `model` for every enrichment
 - [x] MCP tool signatures for `analyze_job` and `score_job_fit` are byte-identical to before
 - [x] Tests: provider protocol conformance via a fake, the cap applied at the boundary and just inside it, reasoning synthesis, malformed-response handling, and the existing `tests/test_tools.py` behavior preserved
-- [ ] `make test-mcp-server` passes; `make up` enriches listings end-to-end as before
-      — **NOT VERIFIED.** Docker is unreachable from this WSL distro (Docker Desktop
-      WSL integration disabled), so the image test stage never ran. 27 tests pass in a
-      venv built from the same requirements files, on Python 3.12 vs the image's 3.13.
-      **Blocked regardless** by the pre-existing `mcp>=1.9.0` pin: mcp 2.x renamed
-      `FastMCP` to `MCPServer`, so `src/server.py` fails to import on a fresh build.
-      Needs `mcp>=1.9.0,<2` (or a 2.x migration) before `make up` can run at all.
+- [x] `make test-mcp-server` passes — **verified 2026-09-23**: 52 passed in Docker on
+      Python 3.13. `make build-mcp-server` produces the artifact image and
+      `src.server` imports cleanly inside it, confirming the `mcp<2` pin. `make build`
+      succeeds for all five services.
 
 ---
 
@@ -188,7 +185,10 @@ Wire `TYPESAFE_API_KEY` and `JEV_MODEL` through `.env.example`,
 - [x] Descriptions are truncated to stay within the 32k `state` budget
 - [x] Per-field confidence and raw probabilities are persisted in `enriched_json`
 - [x] `JEV_MODEL` defaults to the pinned `jev-1.13.0`, and the resolved model id is recorded per enrichment
-- [x] `ENRICHMENT_TYPED_PROVIDER` defaults to `jev`
+- [~] `ENRICHMENT_TYPED_PROVIDER` defaults to `jev`
+      — *reverted to `claude` on 2026-09-23: TypeSafe paused signups, so no key is
+      obtainable and a jev default leaves the service unable to start. The provider
+      itself is unchanged; flip the env var when signups reopen.*
 - [x] Startup fails with an actionable error when provider is `jev` and `TYPESAFE_API_KEY` is unset
 - [x] Setting `ENRICHMENT_TYPED_PROVIDER=claude` fully reverts behavior with no code change
 - [x] Config plumbed through `.env.example`, `docker-compose.yaml`, and `helm/envs/local/`
@@ -265,3 +265,23 @@ low-confidence score is visible rather than silently trusted.
 - Database schema changes — everything new rides in the existing `enriched_json` JSONB column
 - Replacing Claude for text enrichment, which Jev cannot do by construction
 - Upgrading the pinned `claude-sonnet-4-20250514` model in `llm.py` — worth doing, tracked separately so it does not confound the comparison
+
+---
+
+## Repository health found while verifying (2026-09-23)
+
+Both predate this branch — confirmed by running them at the branch point, 12fba73.
+Neither is caused by the provider work, and neither is fixed by it.
+
+- **`make test-worker` cannot pass as written.** `tests/test_db.py` connects to
+  `localhost:5432`, but the Makefile runs the test image with `docker run` and no
+  `--network`, so `localhost` is the container itself. Starting the compose
+  Postgres does not help. It needs the test container attached to the compose
+  network with `POSTGRES_DSN` pointing at the `postgres` service, or a DB
+  fixture that skips when no database is reachable.
+- **5 `chartsSection` tests fail in the dashboard** (`src/templates.test.ts`):
+  score distribution bars, daily counts, top companies, long-name truncation,
+  and empty data. Identical failures at 12fba73.
+
+Current state of `make test`: scraper, mcp-server and notifier pass; worker and
+dashboard fail for the reasons above.
