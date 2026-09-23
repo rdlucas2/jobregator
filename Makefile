@@ -7,6 +7,8 @@ REGISTRY ?= ghcr.io/rdlucas2
 IMAGE_TAG ?= latest
 
 SERVICES = scraper worker dashboard notifier mcp-server
+COMPOSE_PROJECT ?= $(notdir $(CURDIR))
+COMPOSE_NETWORK ?= $(COMPOSE_PROJECT)_default
 
 # Load .env if present (never commit .env — see .env.example)
 ifneq (,$(wildcard .env))
@@ -44,10 +46,17 @@ build-%: ## Build a service artifact image (e.g. make build-scraper)
 	  docker build --target artifact -t jobregator-$*:$(IMAGE_TAG) services/$* ; \
 	fi
 
+# The worker's db tests need a real Postgres. Its test container is attached to
+# the compose network and pointed at the `postgres` service by name — reaching
+# it on localhost is impossible from inside a container.
 test-%: ## Run tests for a service (e.g. make test-dashboard)
 	@if [ "$*" = "worker" ]; then \
 	  docker build --target test -t jobregator-$*-test:$(IMAGE_TAG) -f services/worker/Dockerfile . && \
-	  docker run --rm jobregator-$*-test:$(IMAGE_TAG) ; \
+	  docker compose up -d --wait postgres && \
+	  docker run --rm \
+	    --network $(COMPOSE_NETWORK) \
+	    -e POSTGRES_DSN=postgresql://jobregator:jobregator@postgres:5432/jobregator \
+	    jobregator-$*-test:$(IMAGE_TAG) ; \
 	else \
 	  docker build --target test -t jobregator-$*-test:$(IMAGE_TAG) services/$* && \
 	  docker run --rm jobregator-$*-test:$(IMAGE_TAG) ; \

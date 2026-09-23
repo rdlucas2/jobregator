@@ -31,8 +31,11 @@ def clean_table(db_conn):
     db_conn.commit()
 
 
-def _make_listing(external_id="123", source="adzuna"):
+def _make_listing(external_id="123", source="adzuna", filter_reason=None):
+    # filter_reason is part of insert_listing's contract, not optional: the
+    # worker always sets it (None when the listing passed the hard filters).
     return {
+        "filter_reason": filter_reason,
         "source": source,
         "external_id": external_id,
         "title": "DevOps Engineer",
@@ -96,3 +99,29 @@ def test_update_enrichment_sets_enriched_json_and_score(db_conn):
 def test_update_enrichment_on_nonexistent_listing_is_noop(db_conn):
     # Should not raise, just update 0 rows
     update_enrichment(db_conn, "adzuna", "nonexistent", enriched_json={}, fit_score=0.0)
+
+
+def test_insert_stores_the_reason_a_listing_was_filtered(db_conn):
+    """Rejected listings are kept with their reason rather than dropped, so the
+    dashboard can show what the hard filters removed and why."""
+    listing = _make_listing(external_id="456", filter_reason="not remote (location: Austin, TX)")
+
+    assert insert_listing(db_conn, listing) is True
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT filter_reason FROM job_listings WHERE source = %s AND external_id = %s",
+            ("adzuna", "456"),
+        )
+        assert cur.fetchone()[0] == "not remote (location: Austin, TX)"
+
+
+def test_a_listing_that_passed_the_filters_has_no_reason(db_conn):
+    insert_listing(db_conn, _make_listing(external_id="789"))
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT filter_reason FROM job_listings WHERE source = %s AND external_id = %s",
+            ("adzuna", "789"),
+        )
+        assert cur.fetchone()[0] is None
