@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { layout, listingTable, listingDetail, listingRow, chartsSection, scoreColor, scoreDisplay, formatDate, type Listing } from "./templates.js";
+import type { ScoreBucket, DailyCount, TopCompany, SourceCount, FilterReasonCount, DailySourceCount } from "./db.js";
 
 const fakeListing: Listing = {
   id: 1,
@@ -140,12 +141,38 @@ describe("listingTable", () => {
 });
 
 describe("chartsSection", () => {
+  // chartsSection takes six positional chart datasets. Calling it directly
+  // meant every existing test broke when charts 4-6 were added, without a
+  // compile error — tsconfig excludes *.test.ts and vitest does not
+  // typecheck, so the arity mismatch only surfaced as `undefined.map()` at
+  // runtime. Naming the arguments keeps these tests stable as charts grow.
+  function renderCharts(
+    data: {
+      scores?: ScoreBucket[];
+      daily?: DailyCount[];
+      companies?: TopCompany[];
+      sources?: SourceCount[];
+      reasons?: FilterReasonCount[];
+      dailyBySource?: DailySourceCount[];
+    } = {},
+  ): string {
+    return chartsSection(
+      data.scores ?? [],
+      data.daily ?? [],
+      data.companies ?? [],
+      data.sources ?? [],
+      data.reasons ?? [],
+      data.dailyBySource ?? [],
+    );
+  }
+
   it("renders score distribution bars", () => {
-    const scores = [
-      { label: "0.0-0.3", count: 5 },
-      { label: "0.8-1.0", count: 10 },
-    ];
-    const result = chartsSection(scores, [], []);
+    const result = renderCharts({
+      scores: [
+        { label: "0.0-0.3", count: 5 },
+        { label: "0.8-1.0", count: 10 },
+      ],
+    });
     expect(result).toContain("Score Distribution");
     expect(result).toContain("0.0-0.3");
     expect(result).toContain("0.8-1.0");
@@ -153,36 +180,95 @@ describe("chartsSection", () => {
   });
 
   it("renders daily counts", () => {
-    const daily = [
-      { date: "2026-03-28", count: 15 },
-      { date: "2026-03-29", count: 20 },
-    ];
-    const result = chartsSection([], daily, []);
+    const result = renderCharts({
+      daily: [
+        { date: "2026-03-28", count: 15 },
+        { date: "2026-03-29", count: 20 },
+      ],
+    });
     expect(result).toContain("Listings Per Day");
     expect(result).toContain("Mar");
   });
 
   it("renders top companies", () => {
-    const companies = [
-      { company: "Acme Corp", count: 8 },
-      { company: "Initech", count: 3 },
-    ];
-    const result = chartsSection([], [], companies);
+    const result = renderCharts({
+      companies: [
+        { company: "Acme Corp", count: 8 },
+        { company: "Initech", count: 3 },
+      ],
+    });
     expect(result).toContain("Top Companies");
     expect(result).toContain("Acme Corp");
     expect(result).toContain("Initech");
   });
 
   it("truncates long company names", () => {
-    const companies = [{ company: "Very Long Company Name Inc", count: 5 }];
-    const result = chartsSection([], [], companies);
-    expect(result).toContain("…");
+    const result = renderCharts({
+      companies: [{ company: "Very Long Company Name Inc", count: 5 }],
+    });
+    expect(result).toContain("\u2026");
   });
 
   it("handles empty data gracefully", () => {
-    const result = chartsSection([], [], []);
+    const result = renderCharts();
     expect(result).toContain("charts");
     expect(result).toContain("Score Distribution");
+  });
+
+  it("renders listings by source", () => {
+    const result = renderCharts({
+      sources: [
+        { source: "adzuna", total: 40, passed: 10, filtered: 30 },
+        { source: "remotive", total: 10, passed: 8, filtered: 2 },
+      ],
+    });
+    expect(result).toContain("adzuna");
+    expect(result).toContain("remotive");
+    expect(result).toContain("40");
+  });
+
+  it("renders pass rate per source as a percentage", () => {
+    const result = renderCharts({
+      sources: [{ source: "adzuna", total: 40, passed: 10, filtered: 30 }],
+    });
+    expect(result).toContain("25%");
+  });
+
+  it("does not divide by zero when a source has no listings", () => {
+    const result = renderCharts({
+      sources: [{ source: "jobicy", total: 0, passed: 0, filtered: 0 }],
+    });
+    expect(result).toContain("jobicy");
+    expect(result).not.toContain("NaN");
+  });
+
+  it("renders filter reasons and truncates long ones", () => {
+    const result = renderCharts({
+      reasons: [
+        { reason: "not remote (location: Austin, TX — onsite required)", count: 12 },
+        { reason: "below salary", count: 3 },
+      ],
+    });
+    expect(result).toContain("below salary");
+    expect(result).toContain("\u2026");
+    expect(result).toContain("12");
+  });
+
+  it("says so when nothing was filtered", () => {
+    const result = renderCharts({ reasons: [] });
+    expect(result).toContain("No filtered listings");
+  });
+
+  it("renders daily counts broken down by source", () => {
+    const result = renderCharts({
+      dailyBySource: [
+        { date: "2026-03-28", source: "adzuna", count: 5 },
+        { date: "2026-03-28", source: "remotive", count: 3 },
+        { date: "2026-03-29", source: "adzuna", count: 7 },
+      ],
+    });
+    expect(result).toContain("bar-fill");
+    expect(result).not.toContain("NaN");
   });
 });
 

@@ -36,7 +36,9 @@ export async function getListings(
   const offset = (page - 1) * perPage;
 
   const conditions: string[] = [];
-  const params: unknown[] = [];
+  // Typed rather than unknown[]: db.unsafe() rejects unknown, and an
+  // untypeable params array was masking the only tsc errors in this service.
+  const params: (string | number)[] = [];
   let paramIdx = 1;
 
   if (query.minScore !== undefined) {

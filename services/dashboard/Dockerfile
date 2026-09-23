@@ -18,7 +18,7 @@ COPY src/ ./src/
 # =============================================================================
 FROM base AS test
 
-ENTRYPOINT ["npx", "vitest", "run"]
+ENTRYPOINT ["npm", "test"]
 
 # =============================================================================
 # Stage 3: artifact — minimal production image
