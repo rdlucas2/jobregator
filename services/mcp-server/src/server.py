@@ -15,9 +15,11 @@ log = logging.getLogger(__name__)
 PROFILE_PATH = os.environ.get("PROFILE_PATH", "/config/profile.yaml")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
-# Which model answers the bounded questions. Set to "claude" to revert; that
-# path needs no TypeSafe credential. See plans/jev-typed-decisions.md.
-TYPED_PROVIDER = os.environ.get("ENRICHMENT_TYPED_PROVIDER", "jev")
+# Which model answers the bounded questions. Defaults to "claude" while
+# TypeSafe signups are closed; set "jev" once a TYPESAFE_API_KEY exists. The
+# jev path is implemented and tested, just unexercised against the live API.
+# See plans/jev-typed-decisions.md.
+TYPED_PROVIDER = os.environ.get("ENRICHMENT_TYPED_PROVIDER", "claude")
 TYPESAFE_API_KEY = os.environ.get("TYPESAFE_API_KEY", "")
 # Pinned rather than "jev-latest": routing branches on probability thresholds,
 # and an alias that moves underneath us changes behavior silently.

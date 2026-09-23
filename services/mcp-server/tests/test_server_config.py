@@ -24,11 +24,13 @@ def test_jev_without_an_api_key_fails_with_an_actionable_message(monkeypatch):
         server._get_typesafe_client()
 
 
-def test_the_default_typed_provider_is_jev():
+def test_the_default_typed_provider_is_claude():
+    """Claude is the default while TypeSafe signups are closed. The jev path
+    stays implemented and tested; only the default moved."""
     import importlib
-    monkeypatch_env = {}
+
     reloaded = importlib.reload(server)
-    assert reloaded.TYPED_PROVIDER == "jev"
+    assert reloaded.TYPED_PROVIDER == "claude"
 
 
 def test_jev_model_is_pinned_by_default():
