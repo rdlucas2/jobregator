@@ -5,7 +5,7 @@ import os
 import yaml
 from mcp.server.fastmcp import FastMCP
 
-from src.llm import ClaudeLLM
+from src.llm import DEFAULT_MODEL, ClaudeLLM
 from src.providers.factory import build_text_provider, build_typed_provider
 from src.tools import analyze_job_listing, score_fit
 
@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 
 PROFILE_PATH = os.environ.get("PROFILE_PATH", "/config/profile.yaml")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", DEFAULT_MODEL)
 # Which model answers the bounded questions. Defaults to "claude" while
 # TypeSafe signups are closed; set "jev" once a TYPESAFE_API_KEY exists. The
 # jev path is implemented and tested, just unexercised against the live API.

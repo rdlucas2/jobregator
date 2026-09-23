@@ -52,7 +52,7 @@ services:
       NATS_URL: nats://nats:4222
       POSTGRES_DSN: postgresql://jobregator:jobregator@postgres:5432/jobregator
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-20250514}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-opus-5}
       ENABLE_ENRICHMENT: ${ENABLE_ENRICHMENT:-true}
       ENRICHMENT_TYPED_PROVIDER: ${ENRICHMENT_TYPED_PROVIDER:-claude}
       TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
