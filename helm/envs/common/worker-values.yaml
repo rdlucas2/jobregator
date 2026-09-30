@@ -33,7 +33,8 @@ env:
   - name: CLAUDE_MODEL
     value: "claude-sonnet-5"
   # Which model answers the bounded questions. "claude" while TypeSafe signups
-  # are closed; switch to "jev" once TYPESAFE_API_KEY is populated.
+  # are closed; switch to "jev" once TYPESAFE_API_KEY is populated, or to
+  # "laya" with LAYA_BASE_URL pointing at a reachable laya-serve instance.
   - name: ENRICHMENT_TYPED_PROVIDER
     value: "claude"
   - name: TYPESAFE_API_KEY
@@ -46,6 +47,12 @@ env:
         optional: true
   - name: JEV_MODEL
     value: "jev-1.13.0"
+  # Only read when ENRICHMENT_TYPED_PROVIDER=laya. The in-cluster default has no
+  # Laya server, so set a real URL before selecting that provider.
+  - name: LAYA_BASE_URL
+    value: ""
+  - name: LAYA_MODEL
+    value: "laya"
 
 volumes:
   - name: config
