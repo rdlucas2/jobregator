@@ -74,3 +74,8 @@ def test_asking_for_claude_without_an_llm_fails_loudly():
 def test_unknown_provider_error_lists_both_options():
     with pytest.raises(ValueError, match="claude, jev"):
         build_typed_provider("gpt", llm=FakeLLM())
+
+
+def test_unknown_provider_error_mentions_laya():
+    with pytest.raises(ValueError, match="laya"):
+        build_typed_provider("gpt", llm=FakeLLM())

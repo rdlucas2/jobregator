@@ -13,10 +13,13 @@ from src.providers.claude import ClaudeTextEnrichment, ClaudeTypedDecisions
 from src.providers.jev import DEFAULT_MODEL as DEFAULT_JEV_MODEL
 from src.providers.jev import JevTypedDecisions
 
+DEFAULT_LAYA_MODEL = "laya"
+
 CLAUDE = "claude"
 JEV = "jev"
+LAYA = "laya"
 
-VALID_TYPED_PROVIDERS = (CLAUDE, JEV)
+VALID_TYPED_PROVIDERS = (CLAUDE, JEV, LAYA)
 
 
 def _require(value, name: str, provider: str):
@@ -30,6 +33,7 @@ def build_typed_provider(
     llm=None,
     typesafe_client=None,
     jev_model: str = DEFAULT_JEV_MODEL,
+    laya_model: str = DEFAULT_LAYA_MODEL,
     cached: bool = False,
 ):
     """Build the typed-decision provider named by config."""
@@ -40,6 +44,13 @@ def build_typed_provider(
     elif key == JEV:
         provider = JevTypedDecisions(
             _require(typesafe_client, "typesafe_client", JEV), model=jev_model
+        )
+    elif key == LAYA:
+        # Laya serves Jev's wire protocol, so it shares Jev's question set.
+        provider = JevTypedDecisions(
+            _require(typesafe_client, "typesafe_client", LAYA),
+            model=laya_model,
+            provider_name=LAYA,
         )
     else:
         valid = ", ".join(VALID_TYPED_PROVIDERS)
