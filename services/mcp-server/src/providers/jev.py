@@ -97,15 +97,21 @@ def _questions() -> dict:
 
 
 class JevTypedDecisions:
-    """Answers every bounded question about a listing in one Jev call."""
+    """Answers every bounded question about a listing in one Jev call.
+
+    Any server speaking Jev's /v1/systemone protocol works; `provider_name` is
+    only the label stored with each decision (Laya reuses this class).
+    """
 
     def __init__(
         self,
         client,
         model: str = DEFAULT_MODEL,
         max_description_chars: int = DEFAULT_MAX_DESCRIPTION_CHARS,
+        provider_name: str = PROVIDER_NAME,
     ):
         self._client = client
+        self._provider_name = provider_name
         self._model = model
         self._max_description_chars = max_description_chars
 
@@ -149,7 +155,7 @@ class JevTypedDecisions:
                     name: dict(answers[name].probabilities)
                     for name in _CALIBRATED_FIELDS
                 },
-                provider=PROVIDER_NAME,
+                provider=self._provider_name,
                 model=getattr(response, "model", self._model),
             )
         except (KeyError, AttributeError) as exc:
