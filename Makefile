@@ -16,7 +16,7 @@ ifneq (,$(wildcard .env))
   export
 endif
 
-.PHONY: help build test up down logs \
+.PHONY: help build test up down fresh logs \
         build-% test-% \
         install-hooks gitleaks-scan trivy-scan-%
 
@@ -33,6 +33,13 @@ up: ## Start all services via Docker Compose
 
 down: ## Stop all services
 	docker compose down
+
+# -v drops the named volumes too, so Postgres and the NATS stream start empty.
+# A listing is enriched once, on first insert, so after changing the provider or
+# the prompts this is the simplest way to see the new enrichment on every listing.
+fresh: ## Wipe all containers and data (Postgres, NATS), then rebuild and start
+	docker compose down -v --remove-orphans
+	docker compose up -d --build
 
 logs: ## Tail logs for all services
 	docker compose logs -f
