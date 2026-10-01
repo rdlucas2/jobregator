@@ -62,10 +62,16 @@ LAYA_MODEL=laya
 ANTHROPIC_API_KEY=...   # still required for text enrichment
 ```
 
-Then `docker compose up --build worker` (or your usual target). The worker log
-prints `typed decision provider: laya (laya)` at startup. `docker-compose.yaml`
-already maps `host.docker.internal` to the host, so this works on Docker Desktop
-(Windows/WSL2) and plain Linux alike.
+Then `make fresh`, which wipes the database so every listing is enriched again.
+The provider is built lazily, so the worker log prints
+`typed decision provider: laya (laya)` when it enriches its first listing, not
+at startup. `docker-compose.yaml` already maps `host.docker.internal` to the
+host, so this works on Docker Desktop (Windows/WSL2) and plain Linux alike, and
+also when `laya-serve` runs inside WSL rather than on Windows.
+
+There is no fallback: if Laya is unreachable, enrichment fails and the listing
+is stored raw (`enriched_json` is null). It is not retried, because the
+duplicate check skips it next time. Fix the server, then `make fresh`.
 
 `LAYA_MODEL` is informational: Laya auto-routes by script and language when it
 does not recognise the name. Stored decisions are labelled `provider: laya`, so
